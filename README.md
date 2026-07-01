@@ -19,6 +19,29 @@ python3 -m http.server 8000
 Three.js is loaded from a CDN (unpkg), so you need an internet connection the
 first time. Any static file server works (`npx serve`, VS Code Live Server, etc.).
 
+## Deploying (web hosting)
+
+The app is a fully static site (relative paths, no build step), so it hosts
+anywhere. Two easy options:
+
+### GitHub Pages (recommended — repo is already here)
+
+A workflow at `.github/workflows/deploy-pages.yml` publishes the repo root on
+every push to `main`. To turn it on once:
+
+1. On GitHub go to **Settings → Pages**.
+2. Under **Build and deployment → Source**, choose **GitHub Actions**.
+3. Push to `main` (or re-run the workflow from the **Actions** tab).
+
+The site then goes live at **https://thames1000.github.io/redstone-simulator/**.
+
+### Vercel
+
+1. At [vercel.com/new](https://vercel.com/new), import the GitHub repo.
+2. Framework preset: **Other**. Leave the build command empty and set the
+   output directory to the repo root (`.`).
+3. Deploy — Vercel gives you a `*.vercel.app` URL and redeploys on every push.
+
 ## Controls
 
 | Action | Control |
