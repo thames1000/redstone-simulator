@@ -1,0 +1,55 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; font-family: system-ui, sans-serif; }
+body { background: #1b2330; color: #e8eef6; }
+
+#view { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; }
+
+#toolbar {
+  position: fixed; top: 0; left: 0; right: 0; height: 46px;
+  display: flex; align-items: center; gap: 10px; padding: 0 12px;
+  background: rgba(20, 27, 38, 0.92); border-bottom: 1px solid #33415a; z-index: 10;
+  backdrop-filter: blur(6px);
+}
+#toolbar strong { font-size: 15px; margin-right: 6px; }
+#toolbar button, .loadbtn {
+  background: #2c3a52; color: #e8eef6; border: 1px solid #435273; border-radius: 6px;
+  padding: 6px 10px; cursor: pointer; font-size: 13px;
+}
+#toolbar button:hover, .loadbtn:hover { background: #384a68; }
+#toolbar label { font-size: 12px; display: flex; align-items: center; gap: 6px; }
+#toolbar select {
+  background: #2c3a52; color: #e8eef6; border: 1px solid #435273; border-radius: 6px;
+  padding: 6px 8px; cursor: pointer; font-size: 13px;
+}
+.loadbtn { position: relative; overflow: hidden; }
+.loadbtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.sep { width: 1px; height: 24px; background: #435273; }
+.grow { flex: 1; }
+.hint { font-size: 12px; color: #9fb4d0; }
+.tick { font-size: 12px; color: #9fb4d0; }
+.tick b { color: #ffcf55; }
+#speed { width: 90px; }
+
+#palette {
+  position: fixed; top: 54px; left: 8px; width: 172px; z-index: 10;
+  display: flex; flex-direction: column; gap: 4px;
+  background: rgba(20, 27, 38, 0.9); padding: 8px; border-radius: 8px; border: 1px solid #33415a;
+}
+.pal {
+  display: flex; align-items: center; gap: 8px; text-align: left;
+  background: #263145; color: #e8eef6; border: 1px solid #37455f; border-radius: 6px;
+  padding: 6px 8px; cursor: pointer; font-size: 13px;
+}
+.pal:hover { background: #30415c; }
+.pal.active { background: #3d5a86; border-color: #6f9bd8; box-shadow: 0 0 0 1px #6f9bd8; }
+.pal.tool { justify-content: center; font-weight: 600; }
+.sw { width: 14px; height: 14px; border-radius: 3px; border: 1px solid #0006; flex: none; }
+
+#help {
+  position: fixed; bottom: 8px; left: 8px; z-index: 10; width: 260px;
+  background: rgba(20, 27, 38, 0.9); padding: 10px 12px; border-radius: 8px;
+  border: 1px solid #33415a; font-size: 12px; line-height: 1.5; color: #c7d6ea;
+}
+#help b { color: #ffcf55; }
+#help button { margin-top: 6px; background: #2c3a52; color: #cfe; border: 1px solid #435273; border-radius: 5px; padding: 3px 8px; cursor: pointer; }
+#help.hidden > div, #help.hidden b { display: none; }

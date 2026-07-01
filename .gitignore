@@ -1,0 +1,13 @@
+# dependencies (none currently — Three.js is loaded from a CDN)
+node_modules/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.vscode/
+.idea/
+
+# local saved builds exported from the app
+*.local.json

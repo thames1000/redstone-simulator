@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Redstone Simulator 3D</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.161.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.161.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <canvas id="view"></canvas>
+
+  <div id="toolbar">
+    <strong>⚡ Redstone 3D</strong>
+    <button id="btn-run">▶ Run</button>
+    <button id="btn-step">⏭ Step</button>
+    <label>Speed <input id="speed" type="range" min="1" max="20" value="5" /><span id="speed-val">5</span> tps</label>
+    <span class="sep"></span>
+    <button id="btn-clear">🗑 Clear</button>
+    <select id="examples" title="Load an example build">
+      <option value="">📦 Examples…</option>
+      <option value="basics">Wires, repeater &amp; torch</option>
+      <option value="piston_door">Slime piston door</option>
+      <option value="auto_farm">Crop farm + dispenser</option>
+      <option value="auto_harvester">Auto harvester (shears)</option>
+    </select>
+    <button id="btn-save">💾 Save</button>
+    <label class="loadbtn">📂 Load<input id="file-load" type="file" accept="application/json" /></label>
+    <span class="grow"></span>
+    <span id="mode-hint" class="hint"></span>
+    <span class="tick">tick <b id="tickcount">0</b></span>
+  </div>
+
+  <div id="palette"></div>
+
+  <div id="help">
+    <b>Controls</b>
+    <div>• Left-click: place selected block</div>
+    <div>• Right-click / X: remove block</div>
+    <div>• Drag: orbit &nbsp; Scroll: zoom</div>
+    <div>• R: rotate hovered component</div>
+    <div>• Interact tool: toggle levers, press buttons,<br>&nbsp;&nbsp;repeater = delay, comparator = mode, crop = grow</div>
+    <div>• Pistons push when powered; sticky ones pull back.<br>&nbsp;&nbsp;Slime drags attached blocks along.</div>
+    <div>• Space: run/pause &nbsp; . : single step</div>
+    <button id="help-close">hide</button>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
