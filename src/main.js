@@ -8,6 +8,7 @@ import {
 
 const engine = new RedstoneEngine();
 const scene = new SceneManager(document.getElementById('view'));
+scene.world = engine.world;   // let the renderer read neighbours (dust wiring)
 
 let selected = 'dust';   // current palette selection
 let tool = 'build';      // 'build' | 'interact'
@@ -96,6 +97,7 @@ canvas.addEventListener('contextmenu', e => {
   if (pick && !pick.ground && engine.has(pick.key)) {
     engine.remove(pick.key);
     scene.removeBlock(pick.key);
+    scene.refreshDustNeighbors(pick.key);
     markDirty();
   }
 });
@@ -123,7 +125,7 @@ window.addEventListener('keydown', e => {
     markDirty();
   }
   if (e.key === 'Delete' || e.key === 'x' || e.key === 'X') {
-    if (hover && engine.has(hover.key)) { engine.remove(hover.key); scene.removeBlock(hover.key); markDirty(); }
+    if (hover && engine.has(hover.key)) { engine.remove(hover.key); scene.removeBlock(hover.key); scene.refreshDustNeighbors(hover.key); markDirty(); }
   }
   if (e.key === ' ') { e.preventDefault(); toggleRun(); }
   if (e.key === '.') applyTick();

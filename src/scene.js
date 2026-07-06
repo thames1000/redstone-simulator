@@ -112,14 +112,35 @@ export class SceneManager {
   }
 
   // ---- mesh construction ----------------------------------------------
+  // Build/replace one cell's mesh, then refresh adjacent dust whose
+  // connection shape may have changed because of this cell.
   syncBlock(key, block) {
+    this._build(key, block);
+    this.refreshDustNeighbors(key);
+  }
+
+  _build(key, block) {
     this.removeBlock(key);
-    const g = buildMesh(block);
+    const g = buildMesh(block, key, this.world);
     const { x, y, z } = parseKey(key);
     g.position.set(x + 0.5, y + 0.5, z + 0.5);
     g.userData.cell = key;
     this.scene.add(g);
     this.meshes.set(key, g);
+  }
+
+  // Re-build the geometry of dust cells around `key` (their arms may need to
+  // grow toward, or retract from, the block that just changed here).
+  refreshDustNeighbors(key) {
+    if (!this.world) return;
+    const { x, y, z } = parseKey(key);
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      for (const dy of [0, 1, -1]) {
+        const nk = `${x + dx},${y + dy},${z + dz}`;
+        const b = this.world.get(nk);
+        if (b && b.type === 'dust' && this.meshes.has(nk)) this._build(nk, b);
+      }
+    }
   }
 
   removeBlock(key) {
@@ -131,8 +152,11 @@ export class SceneManager {
   }
 
   rebuildAll(engine) {
+    this.world = engine.world;
     for (const key of [...this.meshes.keys()]) this.removeBlock(key);
-    for (const [key, b] of engine.world) this.syncBlock(key, b);
+    // World is fully populated, so each cell's connections are correct on the
+    // first pass — no need for the neighbour-refresh that syncBlock does.
+    for (const [key, b] of engine.world) this._build(key, b);
   }
 
   // Update materials that change with simulation state (no geometry rebuild).
@@ -177,10 +201,11 @@ export class SceneManager {
 
   // Rebuild meshes for cells the engine moved/spawned/destroyed this tick.
   applyDirty(engine) {
+    this.world = engine.world;
     for (const key of engine.consumeDirty()) {
       const b = engine.world.get(key);
       if (b) this.syncBlock(key, b);
-      else this.removeBlock(key);
+      else { this.removeBlock(key); this.refreshDustNeighbors(key); }
     }
   }
 
@@ -213,7 +238,74 @@ function addArrow(group, dir, color = 0x222222) {
   group.add(cone);
 }
 
-function buildMesh(block) {
+// Redstone-dust wiring: which of the 4 horizontal directions this dust links
+// to, so its plate can render as a dot, a straight line, a bend, or a junction.
+const HORIZ4 = ['east', 'west', 'south', 'north'];
+// Point components dust always visually connects to when adjacent.
+const DUST_POINT = new Set([
+  'dust', 'redstone_block', 'torch', 'lever', 'button',
+  'lamp', 'dispenser', 'observer', 'piston', 'sticky_piston',
+]);
+
+function dustLinksTo(nb, dir) {
+  if (!nb) return false;
+  if (DUST_POINT.has(nb.type)) return true;
+  // Repeaters/comparators only connect along their facing axis.
+  if (nb.type === 'repeater' || nb.type === 'comparator') {
+    return nb.dir === dir || OPPOSITE[nb.dir] === dir;
+  }
+  return false;
+}
+
+function dustConnections(key, world) {
+  const res = { east: false, west: false, south: false, north: false };
+  if (!world || !key) return res;
+  const { x, y, z } = parseKey(key);
+  for (const dir of HORIZ4) {
+    const v = DIRS[dir];
+    const nx = x + v.x, nz = z + v.z;
+    const nb = world.get(`${nx},${y},${nz}`);
+    if (dustLinksTo(nb, dir)) { res[dir] = true; continue; }
+    // Climb: dust sitting on top of the neighbouring block.
+    if (world.get(`${nx},${y + 1},${nz}`)?.type === 'dust') { res[dir] = true; continue; }
+    // Step down: neighbour cell is open and dust runs one level below.
+    const nbSolid = nb && BLOCK_TYPES[nb.type]?.solid;
+    if (!nbSolid && world.get(`${nx},${y - 1},${nz}`)?.type === 'dust') res[dir] = true;
+  }
+  return res;
+}
+
+// Assemble the dust plate from a shared material so updateDynamic can still
+// recolour the whole wire by tinting g.userData.dyn.mat.
+function buildDust(g, conns) {
+  const m = mat(0x3a0000, { emissive: 0x000000, roughness: 1 });
+  const Y = -0.47;
+  // The centre is a hair taller than the arms so their overlap can't z-fight.
+  const strip = (w, d, px, pz, h = 0.06) => {
+    const p = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+    p.position.set(px, Y, pz);
+    g.add(p);
+  };
+  const dirs = HORIZ4.filter(d => conns[d]);
+  if (dirs.length === 0) {
+    // Not wired to anything: a fat centre dot with a small cross poking out.
+    strip(0.6, 0.14, 0, 0);
+    strip(0.14, 0.6, 0, 0);
+    strip(0.36, 0.36, 0, 0, 0.08);
+  } else {
+    const W = 0.22;               // wire width
+    for (const d of dirs) {
+      const v = DIRS[d];
+      // Arm reaching from the centre out to the cell edge (span 0 -> 0.5).
+      if (v.x) strip(0.5, W, v.x * 0.25, 0);
+      else strip(W, 0.5, 0, v.z * 0.25);
+    }
+    strip(0.3, 0.3, 0, 0, 0.08);  // junction node, drawn last & on top
+  }
+  g.userData.dyn.mat = m;
+}
+
+function buildMesh(block, key, world) {
   const g = new THREE.Group();
   g.userData.dyn = {};
   const meta = BLOCK_TYPES[block.type];
@@ -237,11 +329,7 @@ function buildMesh(block) {
       break;
     }
     case 'dust': {
-      const m = mat(0x3a0000, { emissive: 0x000000, roughness: 1 });
-      const plate = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.06, 0.92), m);
-      plate.position.y = -0.47;
-      g.add(plate);
-      g.userData.dyn.mat = m;
+      buildDust(g, dustConnections(key, world));
       break;
     }
     case 'torch': {
