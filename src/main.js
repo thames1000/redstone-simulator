@@ -1,10 +1,10 @@
 // main.js — app entry: wires the engine, scene, palette UI, and input.
 
-import { RedstoneEngine } from './engine.js?v=5';
-import { SceneManager } from './scene.js?v=5';
+import { RedstoneEngine } from './engine.js?v=6';
+import { SceneManager } from './scene.js?v=6';
 import {
   BLOCK_TYPES, PALETTE_ORDER, DIR_NAMES, HORIZONTAL, OPPOSITE,
-} from './blocks.js?v=5';
+} from './blocks.js?v=6';
 
 const engine = new RedstoneEngine();
 const scene = new SceneManager(document.getElementById('view'));

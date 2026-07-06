@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { DIRS, BLOCK_TYPES, parseKey, OPPOSITE } from './blocks.js?v=5';
+import { DIRS, BLOCK_TYPES, parseKey, OPPOSITE } from './blocks.js?v=6';
 
 const CELL = 1;
 
@@ -408,13 +408,23 @@ function buildMesh(block, key, world) {
       break;
     }
     case 'lever': {
+      // Build upright (base on the floor), then rotate so the base sits against
+      // whichever surface it is mounted on (the OPPOSITE[dir] side).
+      const lever = new THREE.Group();
       const base = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.16, 0.5), mat(0x777777));
       base.position.y = -0.42;
-      g.add(base);
+      lever.add(base);
       const handle = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.1), mat(0xbb9966));
       handle.position.y = -0.15;
       handle.rotation.x = block.on ? 0.5 : -0.5;
-      g.add(handle);
+      lever.add(handle);
+      if (block.dir !== 'up') {
+        // Map the local "down" (mount) axis onto the actual mount direction.
+        const m = DIRS[OPPOSITE[block.dir]];
+        lever.quaternion.setFromUnitVectors(
+          new THREE.Vector3(0, -1, 0), new THREE.Vector3(m.x, m.y, m.z));
+      }
+      g.add(lever);
       break;
     }
     case 'button': {

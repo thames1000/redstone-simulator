@@ -162,4 +162,17 @@ run('wall torch inverts its mount block', () => {
   eq(e.get('1,0,0').torchOn, false, 'torch off when mount block is powered');
 });
 
+// 12. A wall-mounted lever strongly powers the block it is attached to.
+run('wall lever strongly powers its mount block', () => {
+  const e = new RedstoneEngine();
+  e.place('0,0,0', 'stone');                               // mount block
+  const lev = e.place('1,0,0', 'lever'); lev.dir = 'east'; lev.on = false; // on east face
+  e.place('0,1,0', 'dust');                                // dust on top of the mount block
+  for (let i = 0; i < 5; i++) e.tick();
+  eq(e.get('0,1,0')._dust, 0, 'dust off when lever off');
+  lev.on = true;
+  for (let i = 0; i < 5; i++) e.tick();
+  eq(e.get('0,1,0')._dust, 15, 'strong power reseeds dust on the mount block');
+});
+
 console.log('\nDone.');

@@ -10,7 +10,7 @@
 import {
   DIRS, DIR_NAMES, OPPOSITE, HORIZONTAL, sidesOf,
   keyOf, parseKey, addDir, BLOCK_TYPES, makeBlock, isMovable, isPoppable,
-} from './blocks.js?v=5';
+} from './blocks.js?v=6';
 
 const HORIZ_AND_DOWN = ['east', 'west', 'south', 'north', 'down'];
 const MAX_PUSH = 12;        // a piston moves at most this many blocks
