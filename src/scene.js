@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { DIRS, BLOCK_TYPES, parseKey, OPPOSITE } from './blocks.js?v=8';
+import { DIRS, BLOCK_TYPES, parseKey, OPPOSITE } from './blocks.js?v=9';
 
 const CELL = 1;
 
@@ -197,10 +197,6 @@ export class SceneManager {
         d.front.emissive.setHex(b.repOn ? 0xff2200 : 0x330000);
         d.front.color.setHex(b.repOn ? 0xff4422 : 0x552222);
         if (d.lock) d.lock.visible = !!b.locked;
-      } else if (b.type === 'comparator') {
-        const on = b.compOut > 0;
-        d.front.emissive.setHex(on ? 0xff2200 : 0x220000);
-        d.front.color.setHex(on ? 0xff4422 : 0x772222);
       } else if (b.type === 'observer') {
         d.back.emissive.setHex(b.obsPulse > 0 ? 0xff2200 : 0x000000);
         d.back.color.setHex(b.obsPulse > 0 ? 0xff4422 : 0x333333);
@@ -469,14 +465,14 @@ function buildMesh(block, key, world) {
         t.position.set(-v.x * 0.34 + p.x * 0.22 * s, -0.28, -v.z * 0.34 + p.z * 0.22 * s);
         g.add(t);
       }
-      // Front output torch: lit when there is output; raised in subtract mode.
+      // Front torch = MODE indicator: lit red and raised in subtract mode, dark
+      // and lowered in compare mode — the "inverted" cue on the real block.
       const sub = block.mode === 'subtract';
-      const frontMat = mat(0x772222, { emissive: 0x220000 });
-      const front = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, 0.12), frontMat);
-      front.position.set(v.x * 0.35, sub ? -0.24 : -0.30, v.z * 0.35);
+      const frontMat = mat(sub ? 0xff4422 : 0x551a1a, { emissive: sub ? 0xff2200 : 0x120000 });
+      const front = new THREE.Mesh(new THREE.BoxGeometry(0.12, sub ? 0.28 : 0.2, 0.12), frontMat);
+      front.position.set(v.x * 0.35, sub ? -0.22 : -0.31, v.z * 0.35);
       g.add(front);
       addArrow(g, block.dir, 0x333333);
-      g.userData.dyn.front = frontMat;
       break;
     }
     case 'observer': {
