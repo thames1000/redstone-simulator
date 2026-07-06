@@ -37,14 +37,13 @@ run('dust decays to 0 after 15 blocks', () => {
 // 3. Redstone torch inverts its mount block's power
 run('torch is off when its mount block is powered', () => {
   const e = new RedstoneEngine();
-  const block = e.place('0,0,0', 'stone');
+  e.place('0,0,0', 'stone');
   const torch = e.place('1,0,0', 'torch'); torch.dir = 'east'; // mounted on 0,0,0
-  const lamp = e.place('1,1,0', 'lamp'); // torch powers block above
-  // no power to block -> torch ON -> lamp lit
+  // power the mount directly with a lever ON it (adjacent powered blocks must not count)
+  const lever = e.place('0,1,0', 'lever'); lever.dir = 'up'; lever.on = false;
   for (let i = 0; i < 4; i++) e.tick();
   eq(e.get('1,0,0').torchOn, true, 'torch on with unpowered mount');
-  // power the mount with a redstone block neighbour
-  e.place('0,1,0', 'redstone_block');
+  lever.on = true; // strongly power the mount block
   for (let i = 0; i < 4; i++) e.tick();
   eq(e.get('1,0,0').torchOn, false, 'torch off when mount powered');
 });
@@ -173,6 +172,19 @@ run('wall lever strongly powers its mount block', () => {
   lev.on = true;
   for (let i = 0; i < 5; i++) e.tick();
   eq(e.get('0,1,0')._dust, 15, 'strong power reseeds dust on the mount block');
+});
+
+// 13. A strongly-powered block does NOT turn off a torch on an ADJACENT block.
+// Block power doesn't chain block-to-block in Minecraft; a torch only inverts
+// the block it is actually mounted on.
+run('adjacent powered block does not turn off a torch', () => {
+  const e = new RedstoneEngine();
+  e.place('0,0,0', 'stone'); e.place('0,1,0', 'stone');       // block GA
+  const lev = e.place('0,2,0', 'lever'); lev.dir = 'up'; lev.on = true; // strongly powers GA
+  e.place('1,1,0', 'stone');                                  // MC, adjacent to GA (east)
+  e.place('2,1,0', 'torch').dir = 'east';                     // torch mounted on MC
+  for (let i = 0; i < 6; i++) e.tick();
+  eq(e.get('2,1,0').torchOn, true, 'torch stays on — power does not chain to the neighbouring block');
 });
 
 console.log('\nDone.');

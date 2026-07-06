@@ -10,7 +10,7 @@
 import {
   DIRS, DIR_NAMES, OPPOSITE, HORIZONTAL, sidesOf,
   keyOf, parseKey, addDir, BLOCK_TYPES, makeBlock, isMovable, isPoppable,
-} from './blocks.js?v=6';
+} from './blocks.js?v=7';
 
 const HORIZ_AND_DOWN = ['east', 'west', 'south', 'north', 'down'];
 const MAX_PUSH = 12;        // a piston moves at most this many blocks
@@ -105,7 +105,7 @@ export class RedstoneEngine {
       switch (b.type) {
         case 'torch': {
           const mount = addDir(key, OPPOSITE[b.dir]);
-          nextTorch.set(key, !this._isPowered(mount, field));
+          nextTorch.set(key, !this._blockPowered(mount, field));
           break;
         }
         case 'repeater': {
@@ -316,6 +316,14 @@ export class RedstoneEngine {
     );
   }
   _isPowered(cell, field) { return this._levelInto(cell, field) > 0; }
+
+  // Is the block at `cell` powered by a DIRECT source — a component on/into it
+  // or dust — as opposed to merely sitting next to another powered block? A
+  // redstone torch reads its mount block this way: an adjacent powered block
+  // must NOT turn the torch off (block power doesn't chain, as in Minecraft).
+  _blockPowered(cell, field) {
+    return (field.strong.get(cell) || 0) > 0 || (field.weak.get(cell) || 0) > 0;
+  }
 
   // The redstone signal the block at `cell` presents to a comparator/repeater
   // sitting at `toward`. This reads the actual level AT the cell (dust level,
