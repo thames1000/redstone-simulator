@@ -10,10 +10,17 @@
 import {
   DIRS, DIR_NAMES, OPPOSITE, HORIZONTAL, sidesOf,
   keyOf, parseKey, addDir, BLOCK_TYPES, makeBlock, isMovable, isPoppable,
-} from './blocks.js?v=3';
+} from './blocks.js?v=4';
 
 const HORIZ_AND_DOWN = ['east', 'west', 'south', 'north', 'down'];
 const MAX_PUSH = 12;        // a piston moves at most this many blocks
+
+// Components a dust wire visually connects to (and thus can power) horizontally.
+// Repeaters/comparators are axis-sensitive and handled separately.
+const DUST_LINK = new Set([
+  'dust', 'redstone_block', 'torch', 'lever', 'button',
+  'lamp', 'dispenser', 'observer', 'piston', 'sticky_piston',
+]);
 const CROP_MAX = 7;         // fully grown wheat stage
 const CROP_INTERVAL = 24;   // ticks between natural growth attempts
 
@@ -319,8 +326,13 @@ export class RedstoneEngine {
       if (!nb) continue;
       switch (nb.type) {
         case 'dust':
-          // dust powers a cell that is horizontally adjacent or directly below it
-          if (d !== 'down') best = Math.max(best, field.dust.get(n) || 0);
+          // Dust powers the cell directly beneath it (dust is at d==='up'),
+          // and cells it points at horizontally — but never sideways into a
+          // component it isn't wired to, nor the cell above it (d==='down').
+          if (d === 'up') best = Math.max(best, field.dust.get(n) || 0);
+          else if (d !== 'down' && this._dustConnectsToward(n, OPPOSITE[d])) {
+            best = Math.max(best, field.dust.get(n) || 0);
+          }
           break;
         case 'redstone_block':
           best = 15; break;
@@ -352,6 +364,26 @@ export class RedstoneEngine {
       if (best === 15) break;
     }
     return best;
+  }
+
+  // Does the dust at `cell` connect (point) toward its neighbour in `dir`?
+  // Dust only delivers power in directions it actually wires up — matching the
+  // rendered wire — so it can't leak sideways into a component it isn't feeding.
+  _dustConnectsToward(cell, dir) {
+    const nb = addDir(cell, dir);
+    const b = this.world.get(nb);
+    if (b) {
+      if (DUST_LINK.has(b.type)) return true;
+      if (b.type === 'repeater' || b.type === 'comparator') {
+        return b.dir === dir || OPPOSITE[b.dir] === dir;
+      }
+    }
+    // climb: dust sitting on top of the neighbouring block
+    if (this.world.get(addDir(nb, 'up'))?.type === 'dust') return true;
+    // step down: neighbour cell is open and dust runs one level below
+    const nbSolid = b && BLOCK_TYPES[b.type]?.solid;
+    if (!nbSolid && this.world.get(addDir(nb, 'down'))?.type === 'dust') return true;
+    return false;
   }
 
   // Dust connectivity: 4 horizontal + climbing up/down over adjacent columns.

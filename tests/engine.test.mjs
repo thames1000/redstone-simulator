@@ -114,4 +114,23 @@ run('observer emits a pulse when its target changes', () => {
   eq(pulsed, true, 'observer pulses on change');
 });
 
+// 9. A repeater does not leak power sideways to a neighbouring repeater.
+// Three repeaters in a row facing north; only the middle one is fed from its
+// rear. The input dust sits beside the outer repeaters' (empty) rear cells,
+// and must NOT switch them on.
+run('repeater does not power a repeater beside it', () => {
+  const e = new RedstoneEngine();
+  for (const x of [-1, 0, 1]) { e.place(`${x},0,0`, 'stone'); e.place(`${x},0,1`, 'stone'); }
+  e.place('0,0,2', 'stone');
+  e.place('-1,1,0', 'repeater').dir = 'north';
+  e.place('0,1,0', 'repeater').dir = 'north';
+  e.place('1,1,0', 'repeater').dir = 'north';
+  e.place('0,1,1', 'dust');                       // feeds only the middle rear
+  const lever = e.place('0,1,2', 'lever'); lever.dir = 'up'; lever.on = true;
+  for (let i = 0; i < 12; i++) e.tick();
+  eq(e.get('0,1,0').repOn, true, 'fed middle repeater is on');
+  eq(e.get('-1,1,0').repOn, false, 'left repeater stays off');
+  eq(e.get('1,1,0').repOn, false, 'right repeater stays off');
+});
+
 console.log('\nDone.');
