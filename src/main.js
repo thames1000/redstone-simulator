@@ -1,10 +1,10 @@
 // main.js — app entry: wires the engine, scene, palette UI, and input.
 
-import { RedstoneEngine } from './engine.js?v=2';
-import { SceneManager } from './scene.js?v=2';
+import { RedstoneEngine } from './engine.js?v=3';
+import { SceneManager } from './scene.js?v=3';
 import {
   BLOCK_TYPES, PALETTE_ORDER, DIR_NAMES, HORIZONTAL, OPPOSITE,
-} from './blocks.js?v=2';
+} from './blocks.js?v=3';
 
 const engine = new RedstoneEngine();
 const scene = new SceneManager(document.getElementById('view'));
@@ -72,6 +72,7 @@ canvas.addEventListener('pointermove', e => {
   dragged = true;
   hover = scene.pick(e.clientX, e.clientY);
   scene.setHighlight(tool === 'build' ? hover?.place : hover?.key);
+  refreshInspector();
 });
 
 canvas.addEventListener('click', e => {
@@ -113,6 +114,56 @@ function interact(pick) {
   else if (b.type === 'dispenser') { b.loaded = b.loaded === 'shears' ? 'bonemeal' : 'shears'; scene.syncBlock(pick.key, b); }
 }
 
+// ---- inspector panel ---------------------------------------------------
+// Live, per-component state for the block currently under the cursor.
+const inspectorEl = document.getElementById('inspector');
+
+// Returns [label, value, kind?] rows describing a block's live state.
+function componentState(b) {
+  switch (b.type) {
+    case 'dust': return [['Signal', `${b._dust || 0} / 15`, (b._dust || 0) > 0]];
+    case 'lever': return [['State', b.on ? 'ON' : 'OFF', b.on]];
+    case 'button': return [['State', b._ticks > 0 ? 'PRESSED' : 'idle', b._ticks > 0]];
+    case 'torch': return [['Output', b.torchOn ? 'ON (15)' : 'OFF', b.torchOn]];
+    case 'redstone_block': return [['Output', '15 (constant)', true]];
+    case 'repeater': return [
+      ['Delay', `${b.delay || 1} tick${(b.delay || 1) > 1 ? 's' : ''}`],
+      ['Output', b.repOn ? 'ON (15)' : 'OFF', b.repOn],
+      ['Locked', b.locked ? 'yes' : 'no', b.locked],
+    ];
+    case 'comparator': return [
+      ['Mode', b.mode || 'compare'],
+      ['Output', `${b.compOut || 0} / 15`, (b.compOut || 0) > 0],
+    ];
+    case 'observer': return [['Pulse', b.obsPulse > 0 ? 'firing' : 'idle', b.obsPulse > 0]];
+    case 'lamp': return [['Lit', b._lit ? 'yes' : 'no', b._lit]];
+    case 'piston': case 'sticky_piston': return [['Extended', b.extended ? 'yes' : 'no', b.extended]];
+    case 'dispenser': return [['Loaded', b.loaded === 'shears' ? 'shears' : 'bone meal']];
+    case 'crop': return [['Growth', `${b.age || 0} / 7`, (b.age || 0) >= 7]];
+    default: return [];
+  }
+}
+
+function inspectorRow(k, v, kind) {
+  const cls = kind === true ? ' on' : kind === false ? ' off' : '';
+  return `<div class="ins-row"><span class="k">${k}</span><span class="v${cls}">${v}</span></div>`;
+}
+
+function refreshInspector() {
+  const key = hover?.key;
+  const b = key && engine.get(key);
+  if (!b) { inspectorEl.classList.add('hidden'); return; }
+  const meta = BLOCK_TYPES[b.type];
+  const sw = `#${meta.color.toString(16).padStart(6, '0')}`;
+  let html = `<div class="ins-title"><span class="sw" style="background:${sw}"></span>${meta.label}</div>`;
+  html += inspectorRow('Cell', key);
+  if (meta.directional) html += inspectorRow('Facing', b.dir);
+  for (const [k, v, kind] of componentState(b)) html += inspectorRow(k, v, kind);
+  html += `<div class="ins-desc">${meta.desc}</div>`;
+  inspectorEl.innerHTML = html;
+  inspectorEl.classList.remove('hidden');
+}
+
 // Rotate the hovered directional block with R.
 window.addEventListener('keydown', e => {
   if (e.key === 'r' || e.key === 'R') {
@@ -136,6 +187,7 @@ function applyTick() {
   engine.tick();
   scene.applyDirty(engine);
   scene.updateDynamic(engine);
+  refreshInspector();
   document.getElementById('tickcount').textContent = engine.tickCount;
 }
 
@@ -161,6 +213,7 @@ function frame(now) {
     if (n > 0) {
       scene.applyDirty(engine);
       scene.updateDynamic(engine);
+      refreshInspector();
       document.getElementById('tickcount').textContent = engine.tickCount;
     }
   }
@@ -177,6 +230,12 @@ function toggleRun() {
 // ---- toolbar wiring ----------------------------------------------------
 document.getElementById('btn-run').onclick = toggleRun;
 document.getElementById('btn-step').onclick = applyTick;
+document.getElementById('btn-signal').onclick = e => {
+  const on = !scene.showSignal;
+  scene.setSignalVisible(on);
+  e.currentTarget.classList.toggle('active', on);
+  scene.updateDynamic(engine);   // reflect immediately, even while paused
+};
 document.getElementById('btn-clear').onclick = () => { if (confirm('Clear the whole build?')) { engine.clear(); scene.rebuildAll(engine); } };
 document.getElementById('speed').oninput = e => { tps = Number(e.target.value); document.getElementById('speed-val').textContent = tps; };
 document.getElementById('btn-save').onclick = () => {

@@ -22,6 +22,7 @@
     <button id="btn-run">▶ Run</button>
     <button id="btn-step">⏭ Step</button>
     <label>Speed <input id="speed" type="range" min="1" max="20" value="5" /><span id="speed-val">5</span> tps</label>
+    <button id="btn-signal" title="Show redstone signal strength (0-15) on dust">🔢 Signal</button>
     <span class="sep"></span>
     <button id="btn-clear">🗑 Clear</button>
     <select id="examples" title="Load an example build">
@@ -40,6 +41,8 @@
 
   <div id="palette"></div>
 
+  <div id="inspector" class="hidden"></div>
+
   <div id="help">
     <b>Controls</b>
     <div>• Left-click: place selected block</div>
@@ -49,9 +52,11 @@
     <div>• Interact tool: toggle levers, press buttons,<br>&nbsp;&nbsp;repeater = delay, comparator = mode, crop = grow</div>
     <div>• Pistons push when powered; sticky ones pull back.<br>&nbsp;&nbsp;Slime drags attached blocks along.</div>
     <div>• Space: run/pause &nbsp; . : single step</div>
+    <div>• Hover any block to inspect its live state</div>
+    <div>• 🔢 Signal: overlay dust power levels (0-15)</div>
     <button id="help-close">hide</button>
   </div>
 
-  <script type="module" src="src/main.js?v=2"></script>
+  <script type="module" src="src/main.js?v=3"></script>
 </body>
 </html>

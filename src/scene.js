@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { DIRS, BLOCK_TYPES, parseKey, OPPOSITE } from './blocks.js?v=2';
+import { DIRS, BLOCK_TYPES, parseKey, OPPOSITE } from './blocks.js?v=3';
 
 const CELL = 1;
 
@@ -10,6 +10,7 @@ export class SceneManager {
   constructor(canvas) {
     this.canvas = canvas;
     this.meshes = new Map();      // key -> THREE.Group
+    this.showSignal = false;      // overlay dust power levels (0-15)
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -147,9 +148,15 @@ export class SceneManager {
     const g = this.meshes.get(key);
     if (!g) return;
     this.scene.remove(g);
-    g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+    g.traverse(o => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
+    });
     this.meshes.delete(key);
   }
+
+  // Toggle the floating signal-strength numbers on dust.
+  setSignalVisible(on) { this.showSignal = on; }
 
   rebuildAll(engine) {
     this.world = engine.world;
@@ -167,10 +174,18 @@ export class SceneManager {
       const d = g.userData.dyn;
       if (!d) continue;
       if (b.type === 'dust') {
-        const t = (b._dust || 0) / 15;
+        const lvl = b._dust || 0;
+        const t = lvl / 15;
         const c = new THREE.Color().setRGB(0.15 + 0.85 * t, 0.02 * t, 0.02 * t);
         d.mat.color.copy(c);
         d.mat.emissive.copy(c).multiplyScalar(0.6 * t);
+        if (this.showSignal) {
+          if (!d.label) { d.label = makeSignalSprite(); g.add(d.label.sprite); }
+          d.label.sprite.visible = true;
+          drawSignal(d.label, lvl);
+        } else if (d.label) {
+          d.label.sprite.visible = false;
+        }
       } else if (b.type === 'lamp') {
         if (b._lit) { d.mat.color.setHex(0xfff2b0); d.mat.emissive.setHex(0xffcf55); }
         else { d.mat.color.setHex(0x5b4a2a); d.mat.emissive.setHex(0x000000); }
@@ -213,6 +228,42 @@ export class SceneManager {
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
   }
+}
+
+// ---- signal-strength overlay -------------------------------------------
+// A camera-facing number floating over a dust cell. depthTest is off so the
+// value stays readable even when the wire is behind other blocks.
+function makeSignalSprite() {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  const tex = new THREE.CanvasTexture(canvas);
+  const material = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(0.5, 0.5, 0.5);
+  sprite.position.set(0, 0.08, 0);   // just above the plate, at cell centre
+  sprite.renderOrder = 999;
+  return { sprite, canvas, ctx, tex, last: null };
+}
+
+function drawSignal(label, val) {
+  if (label.last === val) return;    // only redraw when the number changes
+  label.last = val;
+  const { ctx, tex } = label;
+  ctx.clearRect(0, 0, 64, 64);
+  ctx.font = 'bold 42px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = 7;
+  ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+  ctx.strokeText(val, 32, 34);
+  // dim grey at 0, warming to bright amber at 15
+  const t = val / 15;
+  ctx.fillStyle = val > 0
+    ? `rgb(255,${Math.round(120 + 100 * t)},${Math.round(60 + 20 * t)})`
+    : '#8ea1bd';
+  ctx.fillText(val, 32, 34);
+  tex.needsUpdate = true;
 }
 
 // ---- geometry factory --------------------------------------------------
