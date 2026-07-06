@@ -10,7 +10,7 @@
 import {
   DIRS, DIR_NAMES, OPPOSITE, HORIZONTAL, sidesOf,
   keyOf, parseKey, addDir, BLOCK_TYPES, makeBlock, isMovable, isPoppable,
-} from './blocks.js?v=7';
+} from './blocks.js?v=8';
 
 const HORIZ_AND_DOWN = ['east', 'west', 'south', 'north', 'down'];
 const MAX_PUSH = 12;        // a piston moves at most this many blocks
@@ -403,9 +403,11 @@ export class RedstoneEngine {
     const b = this.world.get(nb);
     if (b) {
       if (DUST_LINK.has(b.type)) return true;
-      if (b.type === 'repeater' || b.type === 'comparator') {
-        return b.dir === dir || OPPOSITE[b.dir] === dir;
-      }
+      // A repeater only wires up along its facing axis. A comparator wires up on
+      // all four sides — back is the rear input, both sides are side inputs, and
+      // the front is the output.
+      if (b.type === 'repeater') return b.dir === dir || OPPOSITE[b.dir] === dir;
+      if (b.type === 'comparator') return true;
     }
     // climb: dust sitting on top of the neighbouring block
     if (this.world.get(addDir(nb, 'up'))?.type === 'dust') return true;

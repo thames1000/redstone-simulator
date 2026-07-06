@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { DIRS, BLOCK_TYPES, parseKey, OPPOSITE } from './blocks.js?v=7';
+import { DIRS, BLOCK_TYPES, parseKey, OPPOSITE } from './blocks.js?v=8';
 
 const CELL = 1;
 
@@ -200,11 +200,7 @@ export class SceneManager {
       } else if (b.type === 'comparator') {
         const on = b.compOut > 0;
         d.front.emissive.setHex(on ? 0xff2200 : 0x220000);
-        if (d.modeMat) {
-          const sub = b.mode === 'subtract';
-          d.modeMat.emissive.setHex(sub ? 0xff2200 : 0x220000);
-          d.modeMat.color.setHex(sub ? 0xff4422 : 0x441111);
-        }
+        d.front.color.setHex(on ? 0xff4422 : 0x772222);
       } else if (b.type === 'observer') {
         d.back.emissive.setHex(b.obsPulse > 0 ? 0xff2200 : 0x000000);
         d.back.color.setHex(b.obsPulse > 0 ? 0xff4422 : 0x333333);
@@ -301,10 +297,10 @@ const DUST_POINT = new Set([
 function dustLinksTo(nb, dir) {
   if (!nb) return false;
   if (DUST_POINT.has(nb.type)) return true;
-  // Repeaters/comparators only connect along their facing axis.
-  if (nb.type === 'repeater' || nb.type === 'comparator') {
-    return nb.dir === dir || OPPOSITE[nb.dir] === dir;
-  }
+  // A repeater connects only along its facing axis; a comparator connects on all
+  // four sides (rear + both side inputs + front output), like the real block.
+  if (nb.type === 'repeater') return nb.dir === dir || OPPOSITE[nb.dir] === dir;
+  if (nb.type === 'comparator') return true;
   return false;
 }
 
@@ -464,18 +460,23 @@ function buildMesh(block, key, world) {
       slab.position.y = -0.42;
       g.add(slab);
       const v = DIRS[block.dir];
+      const p = { x: v.z, z: -v.x };   // horizontal axis perpendicular to facing
+      // Two always-lit reference torches on the rear (comparing) side, side by
+      // side — the pair you see on the real comparator's input end.
+      const backMat = mat(0xff4422, { emissive: 0xff2200 });
+      for (const s of [1, -1]) {
+        const t = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.2, 0.1), backMat);
+        t.position.set(-v.x * 0.34 + p.x * 0.22 * s, -0.28, -v.z * 0.34 + p.z * 0.22 * s);
+        g.add(t);
+      }
+      // Front output torch: lit when there is output; raised in subtract mode.
+      const sub = block.mode === 'subtract';
       const frontMat = mat(0x772222, { emissive: 0x220000 });
       const front = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, 0.12), frontMat);
-      front.position.set(v.x * 0.35, -0.28, v.z * 0.35);
+      front.position.set(v.x * 0.35, sub ? -0.24 : -0.30, v.z * 0.35);
       g.add(front);
-      // mode torch at back (lit = subtract)
-      const modeMat = mat(0x441111, { emissive: 0x220000 });
-      const modeT = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.26, 0.12), modeMat);
-      modeT.position.set(-v.x * 0.35, -0.26, -v.z * 0.35);
-      g.add(modeT);
       addArrow(g, block.dir, 0x333333);
       g.userData.dyn.front = frontMat;
-      g.userData.dyn.modeMat = modeMat;
       break;
     }
     case 'observer': {

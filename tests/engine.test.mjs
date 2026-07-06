@@ -187,4 +187,17 @@ run('adjacent powered block does not turn off a torch', () => {
   eq(e.get('2,1,0').torchOn, true, 'torch stays on — power does not chain to the neighbouring block');
 });
 
+// 14. Dust wires up to a comparator on its SIDE (side input), not just the axis.
+run('dust connects to a comparator on its side', () => {
+  const e = new RedstoneEngine();
+  e.place('0,0,0', 'comparator').dir = 'east';   // faces east -> sides are north/south
+  e.place('0,0,1', 'dust');                        // dust on the south side
+  eq(e._dustConnectsToward('0,0,1', 'north'), true, 'side dust wires into the comparator');
+  // a repeater, by contrast, only connects along its axis
+  const e2 = new RedstoneEngine();
+  e2.place('0,0,0', 'repeater').dir = 'east';
+  e2.place('0,0,1', 'dust');
+  eq(e2._dustConnectsToward('0,0,1', 'north'), false, 'dust does NOT wire into a repeater side');
+});
+
 console.log('\nDone.');
