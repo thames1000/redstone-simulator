@@ -10,7 +10,7 @@
 import {
   DIRS, DIR_NAMES, OPPOSITE, HORIZONTAL, sidesOf,
   keyOf, parseKey, addDir, BLOCK_TYPES, makeBlock, isMovable, isPoppable,
-} from './blocks.js?v=4';
+} from './blocks.js?v=5';
 
 const HORIZ_AND_DOWN = ['east', 'west', 'south', 'north', 'down'];
 const MAX_PUSH = 12;        // a piston moves at most this many blocks
@@ -126,10 +126,10 @@ export class RedstoneEngine {
         }
         case 'comparator': {
           const back = addDir(key, OPPOSITE[b.dir]);
-          const rear = Math.max(this._levelInto(back, field), this._measure(back));
+          const rear = Math.max(this._signalLevel(back, key, field), this._measure(back));
           let side = 0;
           for (const sd of sidesOf(b.dir)) {
-            side = Math.max(side, this._levelInto(addDir(key, sd), field));
+            side = Math.max(side, this._signalLevel(addDir(key, sd), key, field));
           }
           let out;
           if (b.mode === 'subtract') out = Math.max(0, rear - side);
@@ -316,6 +316,27 @@ export class RedstoneEngine {
     );
   }
   _isPowered(cell, field) { return this._levelInto(cell, field) > 0; }
+
+  // The redstone signal the block at `cell` presents to a comparator/repeater
+  // sitting at `toward`. This reads the actual level AT the cell (dust level,
+  // source output, or a component's directed output) instead of the power
+  // flowing into it — so a comparator subtracts exact strengths, not the value
+  // one block upstream.
+  _signalLevel(cell, toward, field) {
+    const b = this.world.get(cell);
+    if (!b) return 0;
+    switch (b.type) {
+      case 'dust': return field.dust.get(cell) || 0;
+      case 'redstone_block': return 15;
+      case 'torch': return b.torchOn ? 15 : 0;
+      case 'lever': return b.on ? 15 : 0;
+      case 'button': return b._ticks > 0 ? 15 : 0;
+      case 'repeater': return (b.repOn && addDir(cell, b.dir) === toward) ? 15 : 0;
+      case 'comparator': return (b.compOut > 0 && addDir(cell, b.dir) === toward) ? b.compOut : 0;
+      default: // solid block: its strong/weak powered level
+        return Math.max(field.strong.get(cell) || 0, field.weak.get(cell) || 0);
+    }
+  }
 
   // The power delivered into `cell` from its 6 neighbours, given the field.
   _powerInto(cell, field) {

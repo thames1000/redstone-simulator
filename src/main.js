@@ -1,10 +1,10 @@
 // main.js — app entry: wires the engine, scene, palette UI, and input.
 
-import { RedstoneEngine } from './engine.js?v=4';
-import { SceneManager } from './scene.js?v=4';
+import { RedstoneEngine } from './engine.js?v=5';
+import { SceneManager } from './scene.js?v=5';
 import {
   BLOCK_TYPES, PALETTE_ORDER, DIR_NAMES, HORIZONTAL, OPPOSITE,
-} from './blocks.js?v=4';
+} from './blocks.js?v=5';
 
 const engine = new RedstoneEngine();
 const scene = new SceneManager(document.getElementById('view'));
@@ -252,6 +252,21 @@ document.getElementById('file-load').onchange = e => {
 
 // ---- example builds ----------------------------------------------------
 const EXAMPLES = {
+  logic_gates: [
+    // Three gates built from wall-mounted redstone torches. Flip the levers
+    // (Interact tool) and watch the lamps. OR / NOT / AND.
+    // OR: lamp lit if EITHER lever is on
+    ['0,0,0', 'stone'], ['2,0,0', 'stone'],
+    ['0,1,0', 'lever', 'up'], ['2,1,0', 'lever', 'up'], ['1,1,0', 'lamp'],
+    // NOT: lamp lit when the lever is OFF (a wall torch inverts its block)
+    ['5,0,0', 'stone'], ['5,1,0', 'stone'], ['5,2,0', 'lever', 'up'],
+    ['6,1,0', 'torch', 'east'], ['7,1,0', 'lamp'],
+    // AND: lamp lit only when BOTH levers are on (NOT of the two inverted inputs)
+    ['0,0,4', 'stone'], ['0,0,6', 'stone'], ['2,0,4', 'stone'], ['2,0,6', 'stone'],
+    ['0,1,4', 'stone'], ['0,2,4', 'lever', 'up'], ['1,1,4', 'torch', 'east'], ['2,1,4', 'dust'],
+    ['0,1,6', 'stone'], ['0,2,6', 'lever', 'up'], ['1,1,6', 'torch', 'east'], ['2,1,6', 'dust'],
+    ['2,1,5', 'stone'], ['3,1,5', 'torch', 'east'], ['4,1,5', 'lamp'],
+  ],
   basics: [
     // lever -> dust line -> lamp
     ['0,0,0', 'stone'], ['1,0,0', 'stone'], ['2,0,0', 'stone'], ['3,0,0', 'stone'], ['4,0,0', 'stone'],

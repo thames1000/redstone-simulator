@@ -133,4 +133,33 @@ run('repeater does not power a repeater beside it', () => {
   eq(e.get('1,1,0').repOn, false, 'right repeater stays off');
 });
 
+// 10. Comparator subtract mode outputs the exact rear-minus-side difference.
+run('comparator subtract yields the exact difference', () => {
+  const e = new RedstoneEngine();
+  for (let x = -3; x <= 1; x++) e.place(`${x},0,0`, 'stone');
+  for (let z = 0; z <= 9; z++) e.place(`0,0,${z}`, 'stone');
+  const c = e.place('0,1,0', 'comparator'); c.dir = 'east'; c.mode = 'subtract';
+  e.place('1,1,0', 'dust');                                  // output/front
+  e.place('-1,1,0', 'dust'); e.place('-2,1,0', 'redstone_block'); // rear = 15
+  for (let z = 1; z <= 8; z++) e.place(`0,1,${z}`, 'dust');
+  e.place('0,1,9', 'redstone_block');                        // side wire: (0,1,1) = 8
+  for (let i = 0; i < 15; i++) e.tick();
+  eq(e.get('-1,1,0')._dust, 15, 'rear dust is 15');
+  eq(e.get('0,1,1')._dust, 8, 'side dust is 8');
+  eq(e.get('0,1,0').compOut, 7, 'subtract 15 - 8 = 7 (exact, not off-by-one)');
+});
+
+// 11. A wall-mounted redstone torch inverts the block it is attached to.
+run('wall torch inverts its mount block', () => {
+  const e = new RedstoneEngine();
+  e.place('0,0,0', 'stone');
+  e.place('1,0,0', 'torch').dir = 'east';                    // torch on the block's east face
+  const lever = e.place('0,1,0', 'lever'); lever.dir = 'up'; lever.on = false;
+  for (let i = 0; i < 5; i++) e.tick();
+  eq(e.get('1,0,0').torchOn, true, 'torch on when mount unpowered');
+  lever.on = true;
+  for (let i = 0; i < 5; i++) e.tick();
+  eq(e.get('1,0,0').torchOn, false, 'torch off when mount block is powered');
+});
+
 console.log('\nDone.');

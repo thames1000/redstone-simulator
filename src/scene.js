@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { DIRS, BLOCK_TYPES, parseKey, OPPOSITE } from './blocks.js?v=4';
+import { DIRS, BLOCK_TYPES, parseKey, OPPOSITE } from './blocks.js?v=5';
 
 const CELL = 1;
 
@@ -384,13 +384,26 @@ function buildMesh(block, key, world) {
       break;
     }
     case 'torch': {
+      // Build the torch upright inside a sub-group, then lean it against the
+      // wall if it is side-mounted (dir is horizontal).
+      const torch = new THREE.Group();
       const stick = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.6, 0.12), mat(0x6b4a2a));
       stick.position.y = -0.2;
-      g.add(stick);
+      torch.add(stick);
       const headMat = mat(0xff5522, { emissive: 0xff3300 });
       const head = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), headMat);
       head.position.y = 0.18;
-      g.add(head);
+      torch.add(head);
+      if (block.dir !== 'up' && block.dir !== 'down') {
+        // Wall torch: sit against the mount wall (the OPPOSITE[dir] side) and
+        // tilt so the head leans outward, away from the block.
+        const v = DIRS[block.dir];
+        torch.position.set(-v.x * 0.32, 0.12, -v.z * 0.32);
+        // Horizontal axis perpendicular to dir (up × dir), so the head tips out.
+        const axis = new THREE.Vector3(v.z, 0, -v.x);
+        torch.quaternion.setFromAxisAngle(axis, 0.5);
+      }
+      g.add(torch);
       g.userData.dyn.mat = headMat;
       break;
     }
