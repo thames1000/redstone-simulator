@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { DIRS, BLOCK_TYPES, parseKey, OPPOSITE, railEnds } from './blocks.js?v=16';
+import { DIRS, BLOCK_TYPES, parseKey, OPPOSITE, railEnds } from './blocks.js?v=17';
 
 const CELL = 1;
 
@@ -616,8 +616,9 @@ function barBetween(a, b, w, m) {
 // so straight rails are a line, corners bend, and ascending rails ramp up.
 function buildRail(g, type, ends, active) {
   const Y = -0.45;
-  const cold = type === 'activator_rail' ? 0x6f4a38 : type === 'powered_rail' ? 0x8a6a1c : 0x9a9a9a;
-  const hot = type === 'activator_rail' ? 0xff4a33 : 0xffc340;
+  const cold = type === 'activator_rail' ? 0x6f4a38 : type === 'powered_rail' ? 0x8a6a1c
+             : type === 'detector_rail' ? 0x7a4a4a : 0x9a9a9a;
+  const hot = type === 'activator_rail' ? 0xff4a33 : type === 'detector_rail' ? 0xff5a44 : 0xffc340;
   const m = mat(active ? hot : cold, { emissive: active ? hot : 0x000000, roughness: 0.55, metalness: 0.4 });
   const tieMat = mat(0x4a3a2a, { roughness: 1 });
   const centre = new THREE.Vector3(0, Y, 0);
@@ -640,8 +641,9 @@ function buildRail(g, type, ends, active) {
 }
 
 function recolorRail(m, type, active) {
-  const cold = type === 'activator_rail' ? 0x6f4a38 : type === 'powered_rail' ? 0x8a6a1c : 0x9a9a9a;
-  const hot = type === 'activator_rail' ? 0xff4a33 : 0xffc340;
+  const cold = type === 'activator_rail' ? 0x6f4a38 : type === 'powered_rail' ? 0x8a6a1c
+             : type === 'detector_rail' ? 0x7a4a4a : 0x9a9a9a;
+  const hot = type === 'activator_rail' ? 0xff4a33 : type === 'detector_rail' ? 0xff5a44 : 0xffc340;
   m.color.setHex(active ? hot : cold);
   m.emissive.setHex(active ? hot : 0x000000);
 }

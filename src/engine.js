@@ -10,7 +10,7 @@
 import {
   DIRS, DIR_NAMES, OPPOSITE, HORIZONTAL, sidesOf,
   keyOf, parseKey, addDir, BLOCK_TYPES, makeBlock, isMovable, isPoppable, railEnds,
-} from './blocks.js?v=16';
+} from './blocks.js?v=17';
 
 const HORIZ_AND_DOWN = ['east', 'west', 'south', 'north', 'down'];
 const MAX_PUSH = 12;        // a piston moves at most this many blocks
@@ -282,6 +282,13 @@ export class RedstoneEngine {
             else addStrong(back, 15);
           }
           break;
+        case 'minecart':
+        case 'tnt_minecart':
+          // A cart sitting on a detector rail emits redstone to its neighbours.
+          if (b.rail && b.rail.type === 'detector_rail') {
+            for (const d of DIR_NAMES) { const n = addDir(key, d); addSeed(n, 15); addStrong(n, 15); }
+          }
+          break;
       }
     }
 
@@ -403,6 +410,8 @@ export class RedstoneEngine {
     const n = addDir(cell, d);
     const nb = this.world.get(n);
     if (!nb) return 0;
+    // A cart on a detector rail is a redstone source to its neighbours.
+    if (BLOCK_TYPES[nb.type].cart) return (nb.rail && nb.rail.type === 'detector_rail') ? 15 : 0;
     switch (nb.type) {
       case 'dust':
         // Dust powers the cell directly beneath it (dust is at d==='up') and
@@ -642,8 +651,11 @@ export class RedstoneEngine {
   _updateRails(field) {
     const rails = new Map(); // key -> rail object (a standalone rail, or a cart's carried rail)
     for (const [key, b] of this.world) {
-      if (BLOCK_TYPES[b.type].rail) rails.set(key, b);
-      else if (BLOCK_TYPES[b.type].cart && b.rail) rails.set(key, b.rail);
+      if (BLOCK_TYPES[b.type].rail) { rails.set(key, b); if (BLOCK_TYPES[b.type].detector) b.active = false; }
+      else if (BLOCK_TYPES[b.type].cart && b.rail) {
+        rails.set(key, b.rail);
+        if (BLOCK_TYPES[b.rail.type].detector) b.rail.active = true;   // a cart is on it
+      }
     }
     const queue = [];
     for (const [key, r] of rails) {

@@ -1,10 +1,10 @@
 // main.js — app entry: wires the engine, scene, palette UI, and input.
 
-import { RedstoneEngine } from './engine.js?v=16';
-import { SceneManager } from './scene.js?v=16';
+import { RedstoneEngine } from './engine.js?v=17';
+import { SceneManager } from './scene.js?v=17';
 import {
   BLOCK_TYPES, PALETTE_ORDER, DIR_NAMES, HORIZONTAL, OPPOSITE,
-} from './blocks.js?v=16';
+} from './blocks.js?v=17';
 
 const engine = new RedstoneEngine();
 const scene = new SceneManager(document.getElementById('view'));
@@ -152,6 +152,7 @@ function componentState(b) {
     case 'crop': return [['Growth', `${b.age || 0} / 7`, (b.age || 0) >= 7]];
     case 'rail': return [['Axis', b.axis === 'z' ? 'north-south' : 'east-west']];
     case 'powered_rail': case 'activator_rail': return [['Active', b.active ? 'yes' : 'no', !!b.active]];
+    case 'detector_rail': return [['Detecting', b.active ? 'cart on it' : 'no cart', !!b.active]];
     case 'minecart': return [['Moving', b.moving ? 'yes' : 'no', !!b.moving], ['On', b.rail?.type || '—']];
     case 'tnt_minecart': return [['Fuse', b.fuse > 0 ? `${b.fuse} — primed!` : 'idle', b.fuse > 0], ['On', b.rail?.type || '—']];
     default: return [];
@@ -279,7 +280,9 @@ const EXAMPLES = {
     ['0,0,0', 'stone'], ['1,0,0', 'stone'], ['2,0,0', 'stone'], ['3,0,0', 'stone'],
     ['4,0,0', 'stone'], ['5,0,0', 'stone'], ['6,0,0', 'stone'], ['7,0,0', 'stone'],
     ['0,1,0', 'powered_rail'], ['0,1,-1', 'redstone_block'],   // drives the cart
-    ['1,1,0', 'rail'], ['2,1,0', 'rail'], ['3,1,0', 'rail'],
+    ['1,1,0', 'rail'],
+    ['2,1,0', 'detector_rail'], ['2,2,0', 'lamp'],   // lamp blinks as the cart rolls over it
+    ['3,1,0', 'rail'],
     ['4,1,0', 'activator_rail'], ['4,1,-1', 'lever', 'up', { on: true }], // ON: ejects the cart (toggle off to let it pass)
     ['5,1,0', 'rail'], ['6,1,0', 'rail'], ['7,1,0', 'rail'],
     ['0,1,0', 'minecart'],   // sits on the powered rail above (carries it)

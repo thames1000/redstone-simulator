@@ -1,5 +1,5 @@
 import { RedstoneEngine } from '../src/engine.js';
-import { makeBlock } from '../src/blocks.js';
+import { makeBlock, railEnds } from '../src/blocks.js';
 
 function run(name, fn) {
   try { fn(); console.log('✓', name); }
@@ -104,6 +104,28 @@ run('an ascending rail carries the cart up a block', () => {
   e.place('0,1,-1', 'redstone_block');
   for (let i = 0; i < 8; i++) e.tick();
   eq(e.get('2,2,0')?.type, 'minecart', 'cart climbed one block up the slope');
+});
+
+// 8. A minecart on a detector rail powers adjacent redstone; it slopes but
+// does not corner (like powered/activator rails).
+run('detector rail outputs redstone while a cart is on it', () => {
+  const e = new RedstoneEngine();
+  e.place('0,0,0', 'stone');
+  cartOn(e, '0,1,0', 'minecart', 'detector_rail', 'east');  // parked on a detector rail
+  e.place('0,2,0', 'lamp');                                  // directly above it
+  for (let i = 0; i < 3; i++) e.tick();
+  eq(e.get('0,2,0')._lit, true, 'lamp lights while the cart is on the detector');
+  eq(e.get('0,1,0').rail.active, true, 'the detector reads active');
+});
+
+run('detector/powered/activator rails slope but do not corner', () => {
+  for (const t of ['detector_rail', 'powered_rail', 'activator_rail']) {
+    const e = new RedstoneEngine();
+    e.place('0,1,0', 'rail'); e.place('1,1,0', t); e.place('1,1,1', 'rail'); // west + south (a corner)
+    const ends = railEnds(e.world, '1,1,0');
+    const dirs = ends.map(x => x.dir).sort().join(',');
+    eq(dirs, 'east,west', `${t} stays straight at a corner`);
+  }
 });
 
 console.log('\nDone.');

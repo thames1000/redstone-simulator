@@ -138,6 +138,11 @@ export const BLOCK_TYPES = {
     needsSupport: true, poppable: true, rail: true, poweredRail: true, activator: true,
     desc: 'When activated by redstone it acts on a minecart passing over it (ejects a plain cart, primes a TNT cart). Activation spreads to connected activator rails up to 8 away.',
   },
+  detector_rail: {
+    label: 'Detector Rail', category: 'transport', color: 0x7a4a4a,
+    needsSupport: true, poppable: true, rail: true, detector: true,
+    desc: 'Outputs a redstone signal to adjacent dust/blocks while a minecart is on it (like a pressure plate for carts). Goes up slopes; does not corner.',
+  },
   minecart: {
     label: 'Minecart', category: 'transport', color: 0x9a9a9a,
     poppable: true, cart: true,
@@ -156,7 +161,7 @@ export const PALETTE_ORDER = [
   'torch', 'redstone_block', 'lever', 'button',
   'repeater', 'comparator', 'observer',
   'piston', 'sticky_piston', 'dispenser', 'crop',
-  'rail', 'powered_rail', 'activator_rail', 'minecart', 'tnt_minecart',
+  'rail', 'powered_rail', 'activator_rail', 'detector_rail', 'minecart', 'tnt_minecart',
   'lamp',
 ];
 
