@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { DIRS, BLOCK_TYPES, parseKey, OPPOSITE, railEnds } from './blocks.js?v=17';
+import { DIRS, BLOCK_TYPES, parseKey, OPPOSITE, railEnds } from './blocks.js?v=18';
 
 const CELL = 1;
 

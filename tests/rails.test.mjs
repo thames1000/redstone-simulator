@@ -128,4 +128,18 @@ run('detector/powered/activator rails slope but do not corner', () => {
   }
 });
 
+// 10. An observer can watch an activator rail turn on.
+run('an observer detects an activator rail activating', () => {
+  const e = new RedstoneEngine();
+  e.place('0,0,0', 'stone');
+  e.place('0,1,0', 'activator_rail');
+  e.place('-1,1,0', 'observer').dir = 'east';    // watches (0,1,0)
+  for (let i = 0; i < 4; i++) e.tick();
+  eq(e.get('-1,1,0').obsPulse, 0, 'idle while the rail is off');
+  e.place('0,1,1', 'redstone_block');            // activates the rail (a different cell)
+  let pulsed = false;
+  for (let i = 0; i < 5; i++) { e.tick(); if (e.get('-1,1,0').obsPulse > 0) pulsed = true; }
+  eq(pulsed, true, 'observer pulsed when the activator rail turned on');
+});
+
 console.log('\nDone.');

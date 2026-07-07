@@ -10,7 +10,7 @@
 import {
   DIRS, DIR_NAMES, OPPOSITE, HORIZONTAL, sidesOf,
   keyOf, parseKey, addDir, BLOCK_TYPES, makeBlock, isMovable, isPoppable, railEnds,
-} from './blocks.js?v=17';
+} from './blocks.js?v=18';
 
 const HORIZ_AND_DOWN = ['east', 'west', 'south', 'north', 'down'];
 const MAX_PUSH = 12;        // a piston moves at most this many blocks
@@ -489,6 +489,10 @@ export class RedstoneEngine {
     if (b.type === 'comparator') s += ':' + b.compOut;
     if (b.type === 'crop') s += ':' + b.age;
     if (b.type === 'piston' || b.type === 'sticky_piston') s += ':' + b.extended;
+    // A rail's activation is observable (so an observer can watch an activator/
+    // powered/detector rail turn on and off), as is a cart riding one.
+    if (BLOCK_TYPES[b.type].rail) s += ':' + b.active;
+    if (BLOCK_TYPES[b.type].cart) s += ':' + b.rail?.active + ':' + b.moving;
     // A solid block's redstone power is observable too: an observer facing a
     // block detects it becoming powered/unpowered (e.g. by dust on top of it).
     if (BLOCK_TYPES[b.type].solid) s += ':P' + this._levelInto(cell, field);
