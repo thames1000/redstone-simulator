@@ -202,4 +202,22 @@ run('observer pulse drives the sticky-piston block drop', () => {
   eq(e.get('1,0,0')?.type || 'air', 'air', '...and did not pull it back');
 });
 
+// A 1-tick pulse TOGGLES a block in/out — the T flip flop core. Push+drop when a
+// block is in front; pull-in when the space ahead is empty (so it doesn't just
+// drop every time).
+run('1-tick pulse toggles a block in and out', () => {
+  const e = new RedstoneEngine();
+  e.place('0,0,0', 'sticky_piston').dir = 'east';   // front F = (1,0,0)
+  e.place('1,0,0', 'redstone_block');               // starts IN at F
+  const lev = e.place('0,0,-1', 'lever'); lev.dir = 'north'; // side power
+  const pulse = () => { lev.on = true; e.tick(); lev.on = false; for (let i = 0; i < 3; i++) e.tick(); };
+  const at = () => e.get('1,0,0')?.type === 'redstone_block' ? 'in'
+                 : e.get('2,0,0')?.type === 'redstone_block' ? 'out' : '?';
+  e.tick(); e.tick();
+  eq(at(), 'in', 'starts in');
+  pulse(); eq(at(), 'out', 'first pulse pushes it out and drops it');
+  pulse(); eq(at(), 'in', 'second pulse pulls it back in');
+  pulse(); eq(at(), 'out', 'third pulse pushes it out again');
+});
+
 console.log('\nDone.');

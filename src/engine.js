@@ -10,7 +10,7 @@
 import {
   DIRS, DIR_NAMES, OPPOSITE, HORIZONTAL, sidesOf,
   keyOf, parseKey, addDir, BLOCK_TYPES, makeBlock, isMovable, isPoppable,
-} from './blocks.js?v=12';
+} from './blocks.js?v=13';
 
 const HORIZ_AND_DOWN = ['east', 'west', 'south', 'north', 'down'];
 const MAX_PUSH = 12;        // a piston moves at most this many blocks
@@ -511,7 +511,8 @@ export class RedstoneEngine {
     head.dir = D; head.base = key;
     this.world.set(F, head); this._markDirty(F);
     b.extended = true;
-    b._extAt = this.tickCount;   // when it extended, for the short-pulse drop
+    b._extAt = this.tickCount;                 // when it extended (short-pulse drop)
+    b._pushed = push.move.length > 0;          // did it actually push a block?
   }
 
   _retractPiston(key, b) {
@@ -522,10 +523,13 @@ export class RedstoneEngine {
     b.extended = false;
     if (b.type !== 'sticky_piston') return;
 
-    // Single-tick pulse: the sticky head retracts before it can re-grab the
-    // block, so the block is DROPPED one space out instead of pulled back. This
-    // is the block-transport / item drop-off trick.
-    if (this.tickCount - (b._extAt ?? -99) <= 1) return;
+    // Single-tick pulse drop: if this cycle PUSHED a block, the sticky head
+    // retracts before it can re-grab it, so the block is dropped one space out
+    // instead of pulled back. But if it extended into an empty space (pushed
+    // nothing), it still pulls the block ahead of it in — so a 1-tick pulse
+    // toggles a block in/out (the T flip flop / block-transport trick).
+    const shortPulse = this.tickCount - (b._extAt ?? -99) <= 1;
+    if (shortPulse && b._pushed) return;
 
     const pullFrom = addDir(F, D); // block just beyond where the head was
     const pb = this.world.get(pullFrom);
