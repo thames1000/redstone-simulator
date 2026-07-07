@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { DIRS, BLOCK_TYPES, parseKey, OPPOSITE } from './blocks.js?v=14';
+import { DIRS, BLOCK_TYPES, parseKey, OPPOSITE, railAxis } from './blocks.js?v=15';
 
 const CELL = 1;
 
@@ -202,6 +202,11 @@ export class SceneManager {
         d.back.color.setHex(b.obsPulse > 0 ? 0xff4422 : 0x333333);
       } else if (b.type === 'crop' && d.crop) {
         applyCropVisual(d, b.age || 0);
+      } else if (BLOCK_TYPES[b.type].rail) {
+        if (d.railMat) recolorRail(d.railMat, b.type, !!b.active);
+      } else if (BLOCK_TYPES[b.type].cart) {
+        if (d.railMat && b.rail) recolorRail(d.railMat, b.rail.type, !!b.rail.active);
+        if (d.tntMat) d.tntMat.emissive.setHex(b.fuse > 0 ? 0xff3300 : 0x000000);
       }
     }
   }
@@ -568,11 +573,64 @@ function buildMesh(block, key, world) {
       applyCropVisual(g.userData.dyn, block.age || 0);
       break;
     }
+    case 'rail':
+    case 'powered_rail':
+    case 'activator_rail': {
+      buildRail(g, block.type, railAxis(world, key), !!block.active);
+      break;
+    }
+    case 'minecart':
+    case 'tnt_minecart': {
+      if (block.rail) buildRail(g, block.rail.type, railAxis(world, key), !!block.rail.active);
+      const tnt = block.type === 'tnt_minecart';
+      const bodyMat = mat(tnt ? 0xc0392b : 0x8f8f8f, { metalness: 0.3, roughness: 0.5, emissive: 0x000000 });
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.34, 0.62), bodyMat);
+      body.position.y = -0.18;
+      g.add(body);
+      const inner = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.34, 0.44), mat(tnt ? 0x7a1f16 : 0x2b2b2b));
+      inner.position.y = -0.12;
+      g.add(inner);
+      if (tnt) g.userData.dyn.tntMat = bodyMat;
+      break;
+    }
     default: {
       g.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat(0xff00ff)));
     }
   }
   return g;
+}
+
+// A flat rail track: two rails along `axis` on wooden ties. Powered/activator
+// rails glow when active. Returns nothing; stores the rail material in dyn.
+function buildRail(g, type, axis, active) {
+  const Y = -0.45, H = 0.06;
+  const cold = type === 'activator_rail' ? 0x6f4a38 : type === 'powered_rail' ? 0x8a6a1c : 0x9a9a9a;
+  const hot = type === 'activator_rail' ? 0xff4a33 : 0xffc340;
+  const m = mat(active ? hot : cold, { emissive: active ? hot : 0x000000, roughness: 0.55, metalness: 0.4 });
+  // ties (perpendicular sleepers)
+  const tieMat = mat(0x4a3a2a, { roughness: 1 });
+  for (const t of [-0.32, 0, 0.32]) {
+    const geo = axis === 'x' ? new THREE.BoxGeometry(0.12, H * 0.7, 0.62) : new THREE.BoxGeometry(0.62, H * 0.7, 0.12);
+    const tie = new THREE.Mesh(geo, tieMat);
+    tie.position.set(axis === 'x' ? t : 0, Y - 0.015, axis === 'x' ? 0 : t);
+    g.add(tie);
+  }
+  // the two rails
+  for (const off of [0.16, -0.16]) {
+    const geo = axis === 'x' ? new THREE.BoxGeometry(0.94, H, 0.07) : new THREE.BoxGeometry(0.07, H, 0.94);
+    const rail = new THREE.Mesh(geo, m);
+    rail.position.set(axis === 'x' ? 0 : off, Y, axis === 'x' ? off : 0);
+    g.add(rail);
+  }
+  g.userData.dyn.railMat = m;
+  g.userData.dyn.railType = type;
+}
+
+function recolorRail(m, type, active) {
+  const cold = type === 'activator_rail' ? 0x6f4a38 : type === 'powered_rail' ? 0x8a6a1c : 0x9a9a9a;
+  const hot = type === 'activator_rail' ? 0xff4a33 : 0xffc340;
+  m.color.setHex(active ? hot : cold);
+  m.emissive.setHex(active ? hot : 0x000000);
 }
 
 // Scale/tint a crop's blades to reflect its growth stage (0-7).

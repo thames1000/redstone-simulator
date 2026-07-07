@@ -1,10 +1,10 @@
 // main.js — app entry: wires the engine, scene, palette UI, and input.
 
-import { RedstoneEngine } from './engine.js?v=14';
-import { SceneManager } from './scene.js?v=14';
+import { RedstoneEngine } from './engine.js?v=15';
+import { SceneManager } from './scene.js?v=15';
 import {
   BLOCK_TYPES, PALETTE_ORDER, DIR_NAMES, HORIZONTAL, OPPOSITE,
-} from './blocks.js?v=14';
+} from './blocks.js?v=15';
 
 const engine = new RedstoneEngine();
 const scene = new SceneManager(document.getElementById('view'));
@@ -79,6 +79,16 @@ canvas.addEventListener('click', e => {
   const pick = scene.pick(e.clientX, e.clientY);
   if (!pick) return;
   if (tool === 'interact') return interact(pick);
+  // A minecart is placed ONTO a rail, carrying it (same cell as the rail).
+  if (BLOCK_TYPES[selected].cart) {
+    const rail = engine.get(pick.key);
+    if (!rail || !BLOCK_TYPES[rail.type].rail) return;   // carts only go on rails
+    const cart = engine.place(pick.key, selected);
+    cart.rail = rail;
+    scene.syncBlock(pick.key, cart);
+    markDirty();
+    return;
+  }
   // build: place at the empty neighbour cell
   const target = pick.place;
   if (engine.has(target) && !pick.ground) return;
@@ -140,6 +150,10 @@ function componentState(b) {
     case 'piston': case 'sticky_piston': return [['Extended', b.extended ? 'yes' : 'no', b.extended]];
     case 'dispenser': return [['Loaded', b.loaded === 'shears' ? 'shears' : 'bone meal']];
     case 'crop': return [['Growth', `${b.age || 0} / 7`, (b.age || 0) >= 7]];
+    case 'rail': return [['Axis', b.axis === 'z' ? 'north-south' : 'east-west']];
+    case 'powered_rail': case 'activator_rail': return [['Active', b.active ? 'yes' : 'no', !!b.active]];
+    case 'minecart': return [['Moving', b.moving ? 'yes' : 'no', !!b.moving], ['On', b.rail?.type || '—']];
+    case 'tnt_minecart': return [['Fuse', b.fuse > 0 ? `${b.fuse} — primed!` : 'idle', b.fuse > 0], ['On', b.rail?.type || '—']];
     default: return [];
   }
 }
@@ -169,6 +183,13 @@ window.addEventListener('keydown', e => {
   if (e.key === 'r' || e.key === 'R') {
     if (!hover) return;
     const b = engine.get(hover.key);
+    if (b && BLOCK_TYPES[b.type].rail) {   // toggle a rail's orientation
+      b.axis = b.axis === 'x' ? 'z' : 'x';
+      scene.syncBlock(hover.key, b);
+      scene.refreshDustNeighbors(hover.key);
+      markDirty();
+      return;
+    }
     if (!b || !BLOCK_TYPES[b.type].directional) return;
     const set = BLOCK_TYPES[b.type].rotatable === 'horizontal' ? HORIZONTAL : DIR_NAMES;
     b.dir = set[(set.indexOf(b.dir) + 1) % set.length];
@@ -252,6 +273,17 @@ document.getElementById('file-load').onchange = e => {
 
 // ---- example builds ----------------------------------------------------
 const EXAMPLES = {
+  minecart: [
+    // A straight track. A redstone block drives the cart off the powered rail;
+    // it coasts east and the (lever-controlled) activator rail ejects it.
+    ['0,0,0', 'stone'], ['1,0,0', 'stone'], ['2,0,0', 'stone'], ['3,0,0', 'stone'],
+    ['4,0,0', 'stone'], ['5,0,0', 'stone'], ['6,0,0', 'stone'], ['7,0,0', 'stone'],
+    ['0,1,0', 'powered_rail'], ['0,1,-1', 'redstone_block'],   // drives the cart
+    ['1,1,0', 'rail'], ['2,1,0', 'rail'], ['3,1,0', 'rail'],
+    ['4,1,0', 'activator_rail'], ['4,1,-1', 'lever', 'up', { on: true }], // ON: ejects the cart (toggle off to let it pass)
+    ['5,1,0', 'rail'], ['6,1,0', 'rail'], ['7,1,0', 'rail'],
+    ['0,1,0', 'minecart'],   // sits on the powered rail above (carries it)
+  ],
   logic_gates: [
     // Three gates built from wall-mounted redstone torches. Flip the levers
     // (Interact tool) and watch the lamps. OR / NOT / AND.
@@ -324,6 +356,14 @@ const EXAMPLES = {
 function loadExample(name) {
   engine.clear();
   for (const [key, type, dir, extra] of EXAMPLES[name]) {
+    // A cart placed on a cell that already holds a rail carries that rail.
+    if (BLOCK_TYPES[type].cart) {
+      const rail = engine.get(key);
+      const cart = engine.place(key, type);
+      if (rail && BLOCK_TYPES[rail.type].rail) cart.rail = rail;
+      if (extra) Object.assign(cart, extra);
+      continue;
+    }
     const b = engine.place(key, type);
     if (dir) b.dir = dir;
     if (extra) Object.assign(b, extra); // e.g. { loaded: 'shears' } or { mode: 'subtract' }

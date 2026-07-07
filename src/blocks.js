@@ -123,6 +123,31 @@ export const BLOCK_TYPES = {
     solid: true, conductive: true, movable: true,
     desc: 'Output. Lights up while powered.',
   },
+  rail: {
+    label: 'Rail', category: 'transport', color: 0x8f8f8f,
+    needsSupport: true, poppable: true, rail: true,
+    desc: 'A track for minecarts. Auto-aligns into straight lines with adjacent rails.',
+  },
+  powered_rail: {
+    label: 'Powered Rail', category: 'transport', color: 0xcaa030,
+    needsSupport: true, poppable: true, rail: true, poweredRail: true, drives: true,
+    desc: 'When activated by redstone it drives a minecart forward; when off it brakes it to a stop. Activation spreads to connected powered rails up to 8 away.',
+  },
+  activator_rail: {
+    label: 'Activator Rail', category: 'transport', color: 0x8a6b52,
+    needsSupport: true, poppable: true, rail: true, poweredRail: true, activator: true,
+    desc: 'When activated by redstone it acts on a minecart passing over it (ejects a plain cart, primes a TNT cart). Activation spreads to connected activator rails up to 8 away.',
+  },
+  minecart: {
+    label: 'Minecart', category: 'transport', color: 0x9a9a9a,
+    poppable: true, cart: true,
+    desc: 'Rides on rails. Powered rails speed it up, an active activator rail ejects it. Place it onto a rail.',
+  },
+  tnt_minecart: {
+    label: 'TNT Minecart', category: 'transport', color: 0xc0392b,
+    poppable: true, cart: true, tnt: true,
+    desc: 'A minecart of TNT. An active activator rail primes it; it explodes after a short fuse. Place it onto a rail.',
+  },
 };
 
 export const PALETTE_ORDER = [
@@ -131,6 +156,7 @@ export const PALETTE_ORDER = [
   'torch', 'redstone_block', 'lever', 'button',
   'repeater', 'comparator', 'observer',
   'piston', 'sticky_piston', 'dispenser', 'crop',
+  'rail', 'powered_rail', 'activator_rail', 'minecart', 'tnt_minecart',
   'lamp',
 ];
 
@@ -143,9 +169,26 @@ export function makeBlock(type) {
   if (type === 'piston' || type === 'sticky_piston') { b.dir = 'east'; b.extended = false; }
   if (type === 'dispenser') { b.dir = 'east'; b._wasPowered = false; b.loaded = 'bonemeal'; }
   if (type === 'crop') { b.dir = 'up'; b.age = 0; b._growth = 0; }
+  if (meta.rail) { b.axis = 'x'; b.active = false; }
+  if (meta.cart) { b.dir = 'east'; b.moving = false; b.rail = null; if (type === 'tnt_minecart') b.fuse = 0; }
   if (meta.toggle) b.on = false;
   return b;
 }
 
 export function isMovable(type) { return !!BLOCK_TYPES[type]?.movable; }
 export function isPoppable(type) { return !!BLOCK_TYPES[type]?.poppable; }
+export function isRail(type) { return !!BLOCK_TYPES[type]?.rail; }
+export function isCart(type) { return !!BLOCK_TYPES[type]?.cart; }
+
+// A rail's orientation ('x' = east-west, 'z' = north-south): aligns to whichever
+// axis has adjacent rails (or the cart riding it), else its stored axis.
+export function railAxis(world, key) {
+  const { x, y, z } = parseKey(key);
+  const railAt = k => { const b = world.get(k); return b && (BLOCK_TYPES[b.type]?.rail || (BLOCK_TYPES[b.type]?.cart && b.rail)); };
+  const ew = railAt(keyOf(x + 1, y, z)) || railAt(keyOf(x - 1, y, z));
+  const ns = railAt(keyOf(x, y, z + 1)) || railAt(keyOf(x, y, z - 1));
+  if (ew && !ns) return 'x';
+  if (ns && !ew) return 'z';
+  const b = world.get(key);
+  return (b && (b.axis || b.rail?.axis)) || 'x';
+}

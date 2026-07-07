@@ -9,17 +9,21 @@
 
 import {
   DIRS, DIR_NAMES, OPPOSITE, HORIZONTAL, sidesOf,
-  keyOf, parseKey, addDir, BLOCK_TYPES, makeBlock, isMovable, isPoppable,
-} from './blocks.js?v=14';
+  keyOf, parseKey, addDir, BLOCK_TYPES, makeBlock, isMovable, isPoppable, railAxis,
+} from './blocks.js?v=15';
 
 const HORIZ_AND_DOWN = ['east', 'west', 'south', 'north', 'down'];
 const MAX_PUSH = 12;        // a piston moves at most this many blocks
+const RAIL_SPREAD = 8;      // activation propagates up to 8 rails from the source
+const TNT_FUSE = 12;        // ticks a primed TNT minecart waits before it explodes
 
 // Components a dust wire visually connects to (and thus can power) horizontally.
-// Repeaters/comparators are axis-sensitive and handled separately.
+// Repeaters/comparators are axis-sensitive and handled separately. Powered and
+// activator rails are here so dust pointing at one activates it.
 const DUST_LINK = new Set([
   'dust', 'redstone_block', 'torch', 'lever', 'button',
   'lamp', 'dispenser', 'observer', 'piston', 'sticky_piston',
+  'powered_rail', 'activator_rail',
 ]);
 const CROP_MAX = 7;         // fully grown wheat stage
 const CROP_INTERVAL = 24;   // ticks between natural growth attempts
@@ -182,13 +186,16 @@ export class RedstoneEngine {
     //     Snapshot the piston/dispenser set first because pistons mutate the
     //     world as they run.
     const mfield = this._computeField();
+    this._updateRails(mfield);   // set active state on powered/activator rails
     const pistons = [];
     const dispensers = [];
     const crops = [];
+    const carts = [];
     for (const [key, b] of this.world) {
       if (b.type === 'piston' || b.type === 'sticky_piston') pistons.push(key);
       else if (b.type === 'dispenser') dispensers.push(key);
       else if (b.type === 'crop') crops.push(key);
+      else if (BLOCK_TYPES[b.type].cart) carts.push(key);
     }
     for (const key of pistons) {
       const b = this.world.get(key);
@@ -210,6 +217,7 @@ export class RedstoneEngine {
       b._growth++;
       if (b._growth >= CROP_INTERVAL && Math.random() < 0.5) { b.age++; b._growth = 0; }
     }
+    for (const key of carts) { const b = this.world.get(key); if (b && BLOCK_TYPES[b.type].cart) this._advanceCart(key, b); }
 
     // 4. Record dust levels + lamp lit for rendering.
     for (const [key, b] of this.world) {
@@ -627,6 +635,100 @@ export class RedstoneEngine {
     }
   }
 
+  // ---- rails & minecarts ----------------------------------------------
+  // Set `active` on every powered/activator rail: true if it is directly
+  // powered by redstone, or connected along the track to a directly-powered
+  // rail of the same type within RAIL_SPREAD (8) — the Java propagation rule.
+  _updateRails(field) {
+    const rails = new Map(); // key -> rail object (a standalone rail, or a cart's carried rail)
+    for (const [key, b] of this.world) {
+      if (BLOCK_TYPES[b.type].rail) rails.set(key, b);
+      else if (BLOCK_TYPES[b.type].cart && b.rail) rails.set(key, b.rail);
+    }
+    const queue = [];
+    for (const [key, r] of rails) {
+      if (!BLOCK_TYPES[r.type].poweredRail) continue;
+      r.active = false;
+      if (this._isPowered(key, field)) { r.active = true; queue.push([key, 0]); }
+    }
+    for (let i = 0; i < queue.length; i++) {
+      const [key, dist] = queue[i];
+      if (dist >= RAIL_SPREAD) continue;
+      const r = rails.get(key);
+      const { x, y, z } = parseKey(key);
+      const ends = railAxis(this.world, key) === 'x'
+        ? [keyOf(x + 1, y, z), keyOf(x - 1, y, z)]
+        : [keyOf(x, y, z + 1), keyOf(x, y, z - 1)];
+      for (const nk of ends) {
+        const nr = rails.get(nk);
+        if (nr && nr.type === r.type && !nr.active) { nr.active = true; queue.push([nk, dist + 1]); }
+      }
+    }
+  }
+
+  // The standalone rail block a cart at `key` would roll onto in `dir`, or null.
+  _railAhead(key, dir) {
+    const nb = this.world.get(addDir(key, dir));
+    return (nb && BLOCK_TYPES[nb.type].rail) ? nb : null;
+  }
+
+  _advanceCart(key, b) {
+    if (b.type === 'tnt_minecart' && b.fuse > 0) {   // primed: tick the fuse down
+      b.fuse--;
+      if (b.fuse === 0) { this._explode(key, 2); return; }
+    }
+    const rail = b.rail;
+    if (!rail) return;                                // resting off a track
+    const meta = BLOCK_TYPES[rail.type];
+    const wasMoving = b.moving;                        // before the rail logic changes it
+
+    if (meta.activator && rail.active) {              // activator rail acts on the cart
+      if (b.type === 'tnt_minecart') { if (b.fuse === 0) b.fuse = TNT_FUSE; }  // prime it
+      else { this._ejectCart(key, b); return; }                                // eject a plain cart
+    } else if (meta.drives) {                         // powered rail drives / brakes
+      if (rail.active) b.moving = true;
+      else { b.moving = false; return; }
+    }
+
+    // Face along the rail. When STARTING from rest, head toward the open end
+    // (away from a wall); a cart already cruising just keeps its direction and
+    // stops at a dead end rather than bouncing back.
+    const along = railAxis(this.world, key) === 'x' ? ['east', 'west'] : ['north', 'south'];
+    if (!along.includes(b.dir)) b.dir = along[0];
+    if (b.moving && !wasMoving && !this._railAhead(key, b.dir) && this._railAhead(key, OPPOSITE[b.dir])) {
+      b.dir = OPPOSITE[b.dir];
+    }
+    if (!b.moving) return;
+
+    const nextRail = this._railAhead(key, b.dir);
+    if (!nextRail) { b.moving = false; return; }      // dead end
+    const next = addDir(key, b.dir);
+    this.world.set(key, rail); this._markDirty(key);  // drop the carried rail back
+    b.rail = nextRail;                                // pick up the next rail and ride on
+    this.world.set(next, b); this._markDirty(next);
+  }
+
+  // No rider to eject in this sim, so an active activator rail pops the empty
+  // cart off the track (restores the rail, removes the cart).
+  _ejectCart(key, b) {
+    if (b.rail) this.world.set(key, b.rail); else this.world.delete(key);
+    this._markDirty(key);
+  }
+
+  _explode(key, r) {
+    const { x, y, z } = parseKey(key);
+    for (let dx = -r; dx <= r; dx++)
+      for (let dy = -r; dy <= r; dy++)
+        for (let dz = -r; dz <= r; dz++) {
+          if (dx * dx + dy * dy + dz * dz > r * r + 1) continue;
+          const k = keyOf(x + dx, y + dy, z + dz);
+          const bl = this.world.get(k);
+          if (bl && (isMovable(bl.type) || isPoppable(bl.type) || BLOCK_TYPES[bl.type].cart)) {
+            this.world.delete(k); this._markDirty(k);
+          }
+        }
+  }
+
   // Serialisation (for save/load).
   toJSON() {
     const blocks = [];
@@ -639,6 +741,8 @@ export class RedstoneEngine {
       if (b.on) e.on = b.on;
       if (b.age) e.age = b.age;
       if (b.loaded && b.loaded !== 'bonemeal') e.loaded = b.loaded;
+      if (b.axis) e.axis = b.axis;
+      if (b.rail) e.rail = b.rail.type;    // the rail a cart is riding
       blocks.push(e);
     }
     return { blocks };
@@ -655,6 +759,8 @@ export class RedstoneEngine {
       if (e.on) b.on = e.on;
       if (e.age) b.age = e.age;
       if (e.loaded) b.loaded = e.loaded;
+      if (e.axis) b.axis = e.axis;
+      if (e.rail) b.rail = makeBlock(e.rail);
       this.set(e.key, b);
     }
   }
