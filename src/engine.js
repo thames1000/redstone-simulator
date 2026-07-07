@@ -10,7 +10,7 @@
 import {
   DIRS, DIR_NAMES, OPPOSITE, HORIZONTAL, sidesOf,
   keyOf, parseKey, addDir, BLOCK_TYPES, makeBlock, isMovable, isPoppable,
-} from './blocks.js?v=9';
+} from './blocks.js?v=10';
 
 const HORIZ_AND_DOWN = ['east', 'west', 'south', 'north', 'down'];
 const MAX_PUSH = 12;        // a piston moves at most this many blocks
@@ -186,7 +186,7 @@ export class RedstoneEngine {
     for (const key of pistons) {
       const b = this.world.get(key);
       if (!b) continue;
-      const powered = this._isPowered(key, field);
+      const powered = this._pistonPowered(key, b, field);
       if (powered && !b.extended) this._extendPiston(key, b);
       else if (!powered && b.extended) this._retractPiston(key, b);
     }
@@ -317,6 +317,18 @@ export class RedstoneEngine {
   }
   _isPowered(cell, field) { return this._levelInto(cell, field) > 0; }
 
+  // A piston is powered like a block, but power arriving through its FRONT
+  // (extension) face is ignored — so a block it pushes, or a redstone block on
+  // the sticky face, can't power it and lock it extended (real-piston rule,
+  // and what makes the sticky-piston T flip flop work).
+  _pistonPowered(key, b, field) {
+    return Math.max(
+      field.strong.get(key) || 0,
+      field.weak.get(key) || 0,
+      this._powerInto(key, field, b.dir),
+    ) > 0;
+  }
+
   // Is the block at `cell` powered by a DIRECT source — a component on/into it
   // or dust — as opposed to merely sitting next to another powered block? A
   // redstone torch reads its mount block this way: an adjacent powered block
@@ -347,9 +359,12 @@ export class RedstoneEngine {
   }
 
   // The power delivered into `cell` from its 6 neighbours, given the field.
-  _powerInto(cell, field) {
+  // `skipDir` (optional) ignores the neighbour in that direction — used by
+  // pistons, which cannot be powered through their front (extension) face.
+  _powerInto(cell, field, skipDir) {
     let best = 0;
     for (const d of DIR_NAMES) {
+      if (d === skipDir) continue;
       const n = addDir(cell, d);
       const nb = this.world.get(n);
       if (!nb) continue;
@@ -482,6 +497,7 @@ export class RedstoneEngine {
     head.dir = D; head.base = key;
     this.world.set(F, head); this._markDirty(F);
     b.extended = true;
+    b._extAt = this.tickCount;   // when it extended, for the short-pulse drop
   }
 
   _retractPiston(key, b) {
@@ -491,6 +507,11 @@ export class RedstoneEngine {
     if (head && head.type === 'piston_head') { this.world.delete(F); this._markDirty(F); }
     b.extended = false;
     if (b.type !== 'sticky_piston') return;
+
+    // Single-tick pulse: the sticky head retracts before it can re-grab the
+    // block, so the block is DROPPED one space out instead of pulled back. This
+    // is the block-transport / item drop-off trick.
+    if (this.tickCount - (b._extAt ?? -99) <= 1) return;
 
     const pullFrom = addDir(F, D); // block just beyond where the head was
     const pb = this.world.get(pullFrom);

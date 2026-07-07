@@ -155,4 +155,38 @@ run('observer-driven harvester resets a ripened crop', () => {
   eq(harvested, true, 'observer pulse fired the shears dispenser and reset the crop');
 });
 
+// A piston is not powered through its front (extension) face.
+run('piston ignores power on its front face', () => {
+  const e = new RedstoneEngine();
+  e.place('0,0,0', 'sticky_piston').dir = 'east';   // front = (1,0,0)
+  e.place('1,0,0', 'redstone_block');               // block on the sticky face
+  for (let i = 0; i < 4; i++) e.tick();
+  eq(e.get('0,0,0').extended, false, 'front redstone block must not power it');
+  // but the back face does
+  const e2 = new RedstoneEngine();
+  e2.place('0,0,0', 'sticky_piston').dir = 'east';
+  e2.place('-1,0,0', 'redstone_block');             // back face
+  for (let i = 0; i < 4; i++) e2.tick();
+  eq(e2.get('0,0,0').extended, true, 'back redstone block powers it');
+});
+
+// A single-tick pulse makes a sticky piston DROP the block; a longer pulse
+// pulls it back (the block-transport / drop-off trick).
+run('sticky piston drops the block on a 1-tick pulse', () => {
+  function pulse(ticks) {
+    const e = new RedstoneEngine();
+    e.place('0,0,0', 'sticky_piston').dir = 'east';
+    e.place('1,0,0', 'stone');                       // block to move
+    const lev = e.place('0,0,-1', 'lever'); lev.dir = 'north'; // side power
+    lev.on = true;  for (let i = 0; i < ticks; i++) e.tick();
+    lev.on = false; for (let i = 0; i < 4; i++) e.tick();
+    return { at1: e.get('1,0,0')?.type || 'air', at2: e.get('2,0,0')?.type || 'air' };
+  }
+  const short = pulse(1);
+  eq(short.at2, 'stone', '1-tick pulse leaves the block dropped one space out');
+  eq(short.at1, 'air', '...and does not pull it back');
+  const long = pulse(3);
+  eq(long.at1, 'stone', 'a longer pulse pulls the block back');
+});
+
 console.log('\nDone.');
