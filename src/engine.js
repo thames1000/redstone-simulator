@@ -10,12 +10,13 @@
 import {
   DIRS, DIR_NAMES, OPPOSITE, HORIZONTAL, sidesOf,
   keyOf, parseKey, addDir, BLOCK_TYPES, makeBlock, isMovable, isPoppable, railEnds,
-} from './blocks.js?v=18';
+} from './blocks.js?v=19';
 
 const HORIZ_AND_DOWN = ['east', 'west', 'south', 'north', 'down'];
 const MAX_PUSH = 12;        // a piston moves at most this many blocks
 const RAIL_SPREAD = 8;      // activation propagates up to 8 rails from the source
 const TNT_FUSE = 12;        // ticks a primed TNT minecart waits before it explodes
+const OBS_COOLDOWN = 2;     // ticks an observer ignores further changes after firing
 
 // Components a dust wire visually connects to (and thus can power) horizontally.
 // Repeaters/comparators are axis-sensitive and handled separately. Powered and
@@ -65,7 +66,7 @@ export class RedstoneEngine {
     if (b.type === 'torch') b.torchOn = true;
     if (b.type === 'repeater') { b.repOn = false; b.repBuf = new Array(b.delay || 1).fill(false); b.locked = false; }
     if (b.type === 'comparator') { b.compOut = 0; b.compBuf = [0]; }
-    if (b.type === 'observer') { b.obsPulse = 0; b.obsPrev = null; }
+    if (b.type === 'observer') { b.obsPulse = 0; b.obsPrev = null; b.obsCool = 0; }
     if (b.type === 'piston' || b.type === 'sticky_piston') { if (b.extended === undefined) b.extended = false; }
     if (b.type === 'dispenser') { if (b._wasPowered === undefined) b._wasPowered = false; if (b.loaded === undefined) b.loaded = 'bonemeal'; }
     if (b.type === 'crop') { if (b.age === undefined) b.age = 0; b._growth = b._growth || 0; }
@@ -144,7 +145,10 @@ export class RedstoneEngine {
         case 'observer': {
           const front = addDir(key, b.dir);
           const sig = this._signature(front, field);
-          const changed = b.obsPrev !== null && sig !== b.obsPrev;
+          // Ignore changes during the cooldown, so a momentary on→off (e.g. a
+          // short activator-rail pulse) fires ONE pulse, not two on back-to-back
+          // ticks (which would read as a 2-tick pulse downstream).
+          const changed = b.obsPrev !== null && sig !== b.obsPrev && !(b.obsCool > 0);
           nextObs.set(key, { sig, changed });
           break;
         }
@@ -173,8 +177,11 @@ export class RedstoneEngine {
       const b = this.world.get(key);
       // A real observer emits a single (1 redstone-tick) pulse. Keeping it to 1
       // tick is both accurate and what lets it trigger the sticky-piston drop.
-      if (changed) b.obsPulse = 1;
-      else if (b.obsPulse > 0) b.obsPulse--;
+      if (changed) { b.obsPulse = 1; b.obsCool = OBS_COOLDOWN; }
+      else {
+        if (b.obsPulse > 0) b.obsPulse--;
+        if (b.obsCool > 0) b.obsCool--;
+      }
       b.obsPrev = sig;
     }
 

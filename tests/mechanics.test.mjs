@@ -220,4 +220,21 @@ run('1-tick pulse toggles a block in and out', () => {
   pulse(); eq(at(), 'out', 'third pulse pushes it out again');
 });
 
+// An observer fires ONE pulse for a momentary on->off change, not two on
+// back-to-back ticks (which would drive a sticky piston with a 2-tick pulse and
+// pull the block back instead of dropping it).
+run('observer fires once on a momentary change (cooldown)', () => {
+  const e = new RedstoneEngine();
+  e.place('0,0,0', 'sticky_piston').dir = 'east';
+  e.place('1,0,0', 'stone');
+  e.place('0,0,-1', 'observer').dir = 'north';   // back=(0,0,0)=piston; watches (0,0,-2)
+  for (let i = 0; i < 4; i++) e.tick();
+  e.place('0,0,-2', 'redstone_block');            // rise
+  e.tick();
+  e.remove('0,0,-2');                             // fall one tick later
+  for (let i = 0; i < 6; i++) e.tick();
+  eq(e.get('2,0,0')?.type, 'stone', 'block dropped one out (single pulse)');
+  eq(e.get('1,0,0')?.type || 'air', 'air', '...not pulled back onto the piston');
+});
+
 console.log('\nDone.');
