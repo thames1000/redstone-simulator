@@ -10,13 +10,13 @@
 import {
   DIRS, DIR_NAMES, OPPOSITE, HORIZONTAL, sidesOf,
   keyOf, parseKey, addDir, BLOCK_TYPES, makeBlock, isMovable, isPoppable, railEnds,
-} from './blocks.js?v=19';
+} from './blocks.js?v=20';
 
 const HORIZ_AND_DOWN = ['east', 'west', 'south', 'north', 'down'];
 const MAX_PUSH = 12;        // a piston moves at most this many blocks
 const RAIL_SPREAD = 8;      // activation propagates up to 8 rails from the source
 const TNT_FUSE = 12;        // ticks a primed TNT minecart waits before it explodes
-const OBS_COOLDOWN = 2;     // ticks an observer ignores further changes after firing
+const OBS_COOLDOWN = 1;     // ticks an observer ignores further changes after firing
 
 // Components a dust wire visually connects to (and thus can power) horizontally.
 // Repeaters/comparators are axis-sensitive and handled separately. Powered and
@@ -496,6 +496,9 @@ export class RedstoneEngine {
     if (b.type === 'comparator') s += ':' + b.compOut;
     if (b.type === 'crop') s += ':' + b.age;
     if (b.type === 'piston' || b.type === 'sticky_piston') s += ':' + b.extended;
+    // An observer's pulse is observable, so two observers facing each other form
+    // a clock (each sees the other fire and fires back).
+    if (b.type === 'observer') s += ':' + (b.obsPulse > 0);
     // A rail's activation is observable (so an observer can watch an activator/
     // powered/detector rail turn on and off), as is a cart riding one.
     if (BLOCK_TYPES[b.type].rail) s += ':' + b.active;

@@ -226,4 +226,15 @@ run('observer detects the watched block becoming powered', () => {
   eq(pulsed, true, 'observer pulses when the watched block becomes powered');
 });
 
+// 17. Two observers facing each other form a clock (each sees the other fire).
+run('two observers facing each other clock', () => {
+  const e = new RedstoneEngine();
+  e.place('0,0,0', 'observer').dir = 'east';    // watches (1,0,0)
+  for (let i = 0; i < 3; i++) e.tick();          // settle
+  e.place('1,0,0', 'observer').dir = 'west';     // facing back -> kickstarts the clock
+  let a = 0, b = 0;
+  for (let i = 0; i < 10; i++) { e.tick(); if (e.get('0,0,0').obsPulse > 0) a++; if (e.get('1,0,0').obsPulse > 0) b++; }
+  if (a < 3 || b < 3) throw new Error(`clock not running: A fired ${a}, B fired ${b}`);
+});
+
 console.log('\nDone.');
