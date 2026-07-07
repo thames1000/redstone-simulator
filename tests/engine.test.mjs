@@ -200,4 +200,15 @@ run('dust connects to a comparator on its side', () => {
   eq(e2._dustConnectsToward('0,0,1', 'north'), false, 'dust does NOT wire into a repeater side');
 });
 
+// 15. A redstone block strongly powers the solid block it touches (like a
+// repeater into a block), so a lamp/dust on that block's far side turns on.
+run('redstone block strongly powers the block it touches', () => {
+  const e = new RedstoneEngine();
+  e.place('0,0,0', 'redstone_block');
+  e.place('1,0,0', 'stone');          // the block it touches
+  e.place('2,0,0', 'lamp');           // on the far side
+  for (let i = 0; i < 4; i++) e.tick();
+  eq(e.get('2,0,0')._lit, true, 'lamp on the far side of the powered block lights');
+});
+
 console.log('\nDone.');

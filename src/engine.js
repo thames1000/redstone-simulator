@@ -10,7 +10,7 @@
 import {
   DIRS, DIR_NAMES, OPPOSITE, HORIZONTAL, sidesOf,
   keyOf, parseKey, addDir, BLOCK_TYPES, makeBlock, isMovable, isPoppable,
-} from './blocks.js?v=11';
+} from './blocks.js?v=12';
 
 const HORIZ_AND_DOWN = ['east', 'west', 'south', 'north', 'down'];
 const MAX_PUSH = 12;        // a piston moves at most this many blocks
@@ -228,7 +228,14 @@ export class RedstoneEngine {
     for (const [key, b] of this.world) {
       switch (b.type) {
         case 'redstone_block':
-          for (const d of DIR_NAMES) addSeed(addDir(key, d), 15);
+          // A power source: feeds adjacent dust AND strongly powers the solid
+          // blocks it touches (like a repeater pointing into a block), so a
+          // block/lamp on its far side lights up.
+          for (const d of DIR_NAMES) {
+            const n = addDir(key, d);
+            addSeed(n, 15);
+            addStrong(n, 15);
+          }
           break;
         case 'lever':
           if (b.on) this._emitSource(key, b, 15, addStrong, addSeed);
@@ -324,16 +331,21 @@ export class RedstoneEngine {
   }
   _isPowered(cell, field) { return this._levelInto(cell, field) > 0; }
 
-  // A piston is powered like a block, but power arriving through its FRONT
-  // (extension) face is ignored — so a block it pushes, or a redstone block on
-  // the sticky face, can't power it and lock it extended (real-piston rule,
-  // and what makes the sticky-piston T flip flop work).
+  // A piston is powered from any face EXCEPT its front (extension) face — so a
+  // block it pushes, or a redstone block touching the sticky face, can't power
+  // it and lock it extended (real-piston rule; makes the T flip flop work).
+  // Scans per-direction rather than the aggregate strong/weak maps so a strong
+  // source on the front (e.g. a redstone block) is genuinely ignored.
   _pistonPowered(key, b, field) {
-    return Math.max(
-      field.strong.get(key) || 0,
-      field.weak.get(key) || 0,
-      this._powerInto(key, field, b.dir),
-    ) > 0;
+    for (const d of DIR_NAMES) {
+      if (d === b.dir) continue;                       // ignore the front face
+      if (this._powerFromDir(key, d, field) > 0) return true;
+      // a lever/button attached directly to this face also powers it
+      const nb = this.world.get(addDir(key, d));
+      if (nb && nb.dir === d &&
+          ((nb.type === 'lever' && nb.on) || (nb.type === 'button' && nb._ticks > 0))) return true;
+    }
+    return false;
   }
 
   // Is the block at `cell` powered by a DIRECT source — a component on/into it
@@ -372,49 +384,44 @@ export class RedstoneEngine {
     let best = 0;
     for (const d of DIR_NAMES) {
       if (d === skipDir) continue;
-      const n = addDir(cell, d);
-      const nb = this.world.get(n);
-      if (!nb) continue;
-      switch (nb.type) {
-        case 'dust':
-          // Dust powers the cell directly beneath it (dust is at d==='up'),
-          // and cells it points at horizontally — but never sideways into a
-          // component it isn't wired to, nor the cell above it (d==='down').
-          if (d === 'up') best = Math.max(best, field.dust.get(n) || 0);
-          else if (d !== 'down' && this._dustConnectsToward(n, OPPOSITE[d])) {
-            best = Math.max(best, field.dust.get(n) || 0);
-          }
-          break;
-        case 'redstone_block':
-          best = 15; break;
-        case 'stone': case 'glass': case 'lamp': case 'dispenser': {
-          if (BLOCK_TYPES[nb.type].conductive) {
-            best = Math.max(best, field.strong.get(n) || 0, field.weak.get(n) || 0);
-          }
-          break;
-        }
-        case 'torch':
-          if (nb.torchOn && cell !== addDir(n, OPPOSITE[nb.dir])) best = 15;
-          break;
-        case 'lever':
-          if (nb.on && cell !== addDir(n, OPPOSITE[nb.dir])) best = 15;
-          break;
-        case 'button':
-          if (nb._ticks > 0 && cell !== addDir(n, OPPOSITE[nb.dir])) best = 15;
-          break;
-        case 'repeater':
-          if (nb.repOn && addDir(n, nb.dir) === cell) best = 15;
-          break;
-        case 'comparator':
-          if (nb.compOut > 0 && addDir(n, nb.dir) === cell) best = Math.max(best, nb.compOut);
-          break;
-        case 'observer':
-          if (nb.obsPulse > 0 && addDir(n, OPPOSITE[nb.dir]) === cell) best = 15;
-          break;
-      }
-      if (best === 15) break;
+      best = Math.max(best, this._powerFromDir(cell, d, field));
+      if (best >= 15) break;
     }
     return best;
+  }
+
+  // Power the neighbour in direction `d` delivers into `cell`.
+  _powerFromDir(cell, d, field) {
+    const n = addDir(cell, d);
+    const nb = this.world.get(n);
+    if (!nb) return 0;
+    switch (nb.type) {
+      case 'dust':
+        // Dust powers the cell directly beneath it (dust is at d==='up') and
+        // cells it points at horizontally — never sideways into a component it
+        // isn't wired to, nor the cell above it (d==='down').
+        if (d === 'up') return field.dust.get(n) || 0;
+        if (d !== 'down' && this._dustConnectsToward(n, OPPOSITE[d])) return field.dust.get(n) || 0;
+        return 0;
+      case 'redstone_block':
+        return 15;
+      case 'stone': case 'glass': case 'lamp': case 'dispenser':
+        return BLOCK_TYPES[nb.type].conductive
+          ? Math.max(field.strong.get(n) || 0, field.weak.get(n) || 0) : 0;
+      case 'torch':
+        return (nb.torchOn && cell !== addDir(n, OPPOSITE[nb.dir])) ? 15 : 0;
+      case 'lever':
+        return (nb.on && cell !== addDir(n, OPPOSITE[nb.dir])) ? 15 : 0;
+      case 'button':
+        return (nb._ticks > 0 && cell !== addDir(n, OPPOSITE[nb.dir])) ? 15 : 0;
+      case 'repeater':
+        return (nb.repOn && addDir(n, nb.dir) === cell) ? 15 : 0;
+      case 'comparator':
+        return (nb.compOut > 0 && addDir(n, nb.dir) === cell) ? nb.compOut : 0;
+      case 'observer':
+        return (nb.obsPulse > 0 && addDir(n, OPPOSITE[nb.dir]) === cell) ? 15 : 0;
+    }
+    return 0;
   }
 
   // Does the dust at `cell` connect (point) toward its neighbour in `dir`?
