@@ -211,4 +211,19 @@ run('redstone block strongly powers the block it touches', () => {
   eq(e.get('2,0,0')._lit, true, 'lamp on the far side of the powered block lights');
 });
 
+// 16. An observer detects a change in the redstone power of the block it faces
+// (e.g. dust on top of that block powering it), not just block-type changes.
+run('observer detects the watched block becoming powered', () => {
+  const e = new RedstoneEngine();
+  e.place('0,0,0', 'stone');                    // the observed block
+  e.place('0,1,0', 'dust');                     // redstone on top of it
+  e.place('-1,0,0', 'observer').dir = 'east';   // faces (0,0,0)
+  for (let i = 0; i < 4; i++) e.tick();
+  eq(e.get('-1,0,0').obsPulse, 0, 'idle before the change');
+  e.place('1,1,0', 'redstone_block');           // powers the dust -> block gets powered
+  let pulsed = false;
+  for (let i = 0; i < 4; i++) { e.tick(); if (e.get('-1,0,0').obsPulse > 0) pulsed = true; }
+  eq(pulsed, true, 'observer pulses when the watched block becomes powered');
+});
+
 console.log('\nDone.');
