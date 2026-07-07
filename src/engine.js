@@ -10,7 +10,7 @@
 import {
   DIRS, DIR_NAMES, OPPOSITE, HORIZONTAL, sidesOf,
   keyOf, parseKey, addDir, BLOCK_TYPES, makeBlock, isMovable, isPoppable,
-} from './blocks.js?v=10';
+} from './blocks.js?v=11';
 
 const HORIZ_AND_DOWN = ['east', 'west', 'south', 'north', 'down'];
 const MAX_PUSH = 12;        // a piston moves at most this many blocks
@@ -167,14 +167,21 @@ export class RedstoneEngine {
 
     for (const [key, { sig, changed }] of nextObs) {
       const b = this.world.get(key);
-      if (changed) b.obsPulse = 2;
+      // A real observer emits a single (1 redstone-tick) pulse. Keeping it to 1
+      // tick is both accurate and what lets it trigger the sticky-piston drop.
+      if (changed) b.obsPulse = 1;
       else if (b.obsPulse > 0) b.obsPulse--;
       b.obsPrev = sig;
     }
 
-    // 3b. Mechanical blocks act on the field: pistons move blocks, dispensers
-    //     fire on rising edges, crops grow. Snapshot the piston/dispenser set
-    //     first because pistons mutate the world as they run.
+    // 3b. Mechanical blocks act on the field AFTER this tick's logic settled.
+    //     Recompute it so pistons/dispensers see the just-updated torch,
+    //     observer, repeater and comparator states (a delayed component and its
+    //     start-of-tick snapshot must not both count — that would, e.g., stretch
+    //     a 1-tick observer pulse to 2 ticks and stop sticky pistons dropping).
+    //     Snapshot the piston/dispenser set first because pistons mutate the
+    //     world as they run.
+    const mfield = this._computeField();
     const pistons = [];
     const dispensers = [];
     const crops = [];
@@ -186,14 +193,14 @@ export class RedstoneEngine {
     for (const key of pistons) {
       const b = this.world.get(key);
       if (!b) continue;
-      const powered = this._pistonPowered(key, b, field);
+      const powered = this._pistonPowered(key, b, mfield);
       if (powered && !b.extended) this._extendPiston(key, b);
       else if (!powered && b.extended) this._retractPiston(key, b);
     }
     for (const key of dispensers) {
       const b = this.world.get(key);
       if (!b) continue;
-      const powered = this._isPowered(key, field);
+      const powered = this._isPowered(key, mfield);
       if (powered && !b._wasPowered) this._fireDispenser(key, b);
       b._wasPowered = powered;
     }

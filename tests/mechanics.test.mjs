@@ -189,4 +189,17 @@ run('sticky piston drops the block on a 1-tick pulse', () => {
   eq(long.at1, 'stone', 'a longer pulse pulls the block back');
 });
 
+// An observer's single (1-tick) pulse drives the sticky-piston block drop.
+run('observer pulse drives the sticky-piston block drop', () => {
+  const e = new RedstoneEngine();
+  e.place('0,0,0', 'sticky_piston').dir = 'east';   // front = (1,0,0)
+  e.place('1,0,0', 'stone');                         // block to transport
+  e.place('0,0,-1', 'observer').dir = 'north';       // back=(0,0,0)=piston; watches (0,0,-2)
+  for (let i = 0; i < 4; i++) e.tick();              // settle
+  e.place('0,0,-2', 'redstone_block');               // a change the observer sees
+  for (let i = 0; i < 6; i++) e.tick();
+  eq(e.get('2,0,0')?.type, 'stone', 'observer pulse dropped the block one space out');
+  eq(e.get('1,0,0')?.type || 'air', 'air', '...and did not pull it back');
+});
+
 console.log('\nDone.');
