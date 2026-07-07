@@ -9,8 +9,8 @@
 
 import {
   DIRS, DIR_NAMES, OPPOSITE, HORIZONTAL, sidesOf,
-  keyOf, parseKey, addDir, BLOCK_TYPES, makeBlock, isMovable, isPoppable, railAxis,
-} from './blocks.js?v=15';
+  keyOf, parseKey, addDir, BLOCK_TYPES, makeBlock, isMovable, isPoppable, railEnds,
+} from './blocks.js?v=16';
 
 const HORIZ_AND_DOWN = ['east', 'west', 'south', 'north', 'down'];
 const MAX_PUSH = 12;        // a piston moves at most this many blocks
@@ -656,20 +656,13 @@ export class RedstoneEngine {
       if (dist >= RAIL_SPREAD) continue;
       const r = rails.get(key);
       const { x, y, z } = parseKey(key);
-      const ends = railAxis(this.world, key) === 'x'
-        ? [keyOf(x + 1, y, z), keyOf(x - 1, y, z)]
-        : [keyOf(x, y, z + 1), keyOf(x, y, z - 1)];
-      for (const nk of ends) {
+      for (const e of railEnds(this.world, key)) {   // propagate along the actual track ends
+        const v = DIRS[e.dir];
+        const nk = keyOf(x + v.x, y + e.dy, z + v.z);
         const nr = rails.get(nk);
         if (nr && nr.type === r.type && !nr.active) { nr.active = true; queue.push([nk, dist + 1]); }
       }
     }
-  }
-
-  // The standalone rail block a cart at `key` would roll onto in `dir`, or null.
-  _railAhead(key, dir) {
-    const nb = this.world.get(addDir(key, dir));
-    return (nb && BLOCK_TYPES[nb.type].rail) ? nb : null;
   }
 
   _advanceCart(key, b) {
@@ -690,19 +683,31 @@ export class RedstoneEngine {
       else { b.moving = false; return; }
     }
 
-    // Face along the rail. When STARTING from rest, head toward the open end
-    // (away from a wall); a cart already cruising just keeps its direction and
-    // stops at a dead end rather than bouncing back.
-    const along = railAxis(this.world, key) === 'x' ? ['east', 'west'] : ['north', 'south'];
-    if (!along.includes(b.dir)) b.dir = along[0];
-    if (b.moving && !wasMoving && !this._railAhead(key, b.dir) && this._railAhead(key, OPPOSITE[b.dir])) {
-      b.dir = OPPOSITE[b.dir];
-    }
     if (!b.moving) return;
 
-    const nextRail = this._railAhead(key, b.dir);
-    if (!nextRail) { b.moving = false; return; }      // dead end
-    const next = addDir(key, b.dir);
+    // Follow the track: pick the exit end. A cruising cart leaves via the end
+    // opposite the one it arrived through (so corners turn it); a cart starting
+    // from rest heads toward whichever end leads onward to a rail.
+    const { x, y, z } = parseKey(key);
+    const ends = railEnds(this.world, key);
+    const leadsOn = e => {
+      const v = DIRS[e.dir];
+      const nb = this.world.get(keyOf(x + v.x, y + e.dy, z + v.z));
+      return nb && BLOCK_TYPES[nb.type].rail;
+    };
+    let exit;
+    if (wasMoving) {
+      const entry = ends.find(e => e.dir === OPPOSITE[b.dir]);
+      exit = entry ? ends.find(e => e !== entry) : ends.find(e => e.dir === b.dir);
+    } else {
+      exit = ends.find(leadsOn);
+    }
+    if (!exit || !leadsOn(exit)) { b.moving = false; return; }   // dead end / misaligned
+
+    b.dir = exit.dir;
+    const v = DIRS[exit.dir];
+    const next = keyOf(x + v.x, y + exit.dy, z + v.z);
+    const nextRail = this.world.get(next);
     this.world.set(key, rail); this._markDirty(key);  // drop the carried rail back
     b.rail = nextRail;                                // pick up the next rail and ride on
     this.world.set(next, b); this._markDirty(next);

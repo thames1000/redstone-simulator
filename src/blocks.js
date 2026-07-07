@@ -180,15 +180,50 @@ export function isPoppable(type) { return !!BLOCK_TYPES[type]?.poppable; }
 export function isRail(type) { return !!BLOCK_TYPES[type]?.rail; }
 export function isCart(type) { return !!BLOCK_TYPES[type]?.cart; }
 
-// A rail's orientation ('x' = east-west, 'z' = north-south): aligns to whichever
-// axis has adjacent rails (or the cart riding it), else its stored axis.
-export function railAxis(world, key) {
+const RAIL_DIRS = ['east', 'west', 'north', 'south'];
+
+// The two ends of a rail piece, each `{dir, dy}` where dir is a horizontal
+// direction and dy is the vertical step at that end (0 flat, +1 ascends up,
+// -1 descends). This encodes straight rails, corners (perpendicular ends, plain
+// rails only) and slopes (an end with dy≠0), auto-aligned to neighbouring rails.
+export function railEnds(world, key) {
   const { x, y, z } = parseKey(key);
+  const self = world.get(key);
+  const type = self && (BLOCK_TYPES[self.type]?.rail ? self.type : self.rail?.type);
   const railAt = k => { const b = world.get(k); return b && (BLOCK_TYPES[b.type]?.rail || (BLOCK_TYPES[b.type]?.cart && b.rail)); };
-  const ew = railAt(keyOf(x + 1, y, z)) || railAt(keyOf(x - 1, y, z));
-  const ns = railAt(keyOf(x, y, z + 1)) || railAt(keyOf(x, y, z - 1));
-  if (ew && !ns) return 'x';
-  if (ns && !ew) return 'z';
-  const b = world.get(key);
-  return (b && (b.axis || b.rail?.axis)) || 'x';
+  const conns = [];
+  for (const d of RAIL_DIRS) {
+    const v = DIRS[d];
+    if (railAt(keyOf(x + v.x, y, z + v.z))) conns.push({ dir: d, dy: 0 });
+    else if (railAt(keyOf(x + v.x, y + 1, z + v.z))) conns.push({ dir: d, dy: 1 });   // ascends toward d
+    else if (railAt(keyOf(x + v.x, y - 1, z + v.z))) conns.push({ dir: d, dy: -1 });  // descends toward d
+  }
+  const byDir = {}; for (const c of conns) byDir[c.dir] = c;
+  const stored = (self && (self.axis || self.rail?.axis)) || 'x';
+  const straight = ax => ax === 'x' ? [byDir.east || { dir: 'east', dy: 0 }, byDir.west || { dir: 'west', dy: 0 }]
+                                    : [byDir.north || { dir: 'north', dy: 0 }, byDir.south || { dir: 'south', dy: 0 }];
+
+  // A straight (opposite) pair always wins.
+  if (byDir.east && byDir.west) return [byDir.east, byDir.west];
+  if (byDir.north && byDir.south) return [byDir.north, byDir.south];
+  // Two+ perpendicular connections: plain rails corner; powered/activator stay straight.
+  if (conns.length >= 2) {
+    if (type === 'rail') {
+      const pick = ['south', 'east', 'north', 'west'].filter(d => byDir[d]).slice(0, 2).map(d => byDir[d]);
+      if (pick.length === 2) return pick;
+    }
+    return straight(conns[0].dir === 'east' || conns[0].dir === 'west' ? 'x' : 'z');
+  }
+  // One connection: straight along its axis (the other end is open).
+  if (conns.length === 1) {
+    const c = conns[0];
+    return [c, { dir: OPPOSITE[c.dir], dy: 0 }];
+  }
+  return straight(stored);
+}
+
+// Legacy helper: the straight axis of a rail ('x' or 'z').
+export function railAxis(world, key) {
+  const [a] = railEnds(world, key);
+  return (a.dir === 'east' || a.dir === 'west') ? 'x' : 'z';
 }

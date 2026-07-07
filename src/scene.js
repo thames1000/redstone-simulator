@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { DIRS, BLOCK_TYPES, parseKey, OPPOSITE, railAxis } from './blocks.js?v=15';
+import { DIRS, BLOCK_TYPES, parseKey, OPPOSITE, railEnds } from './blocks.js?v=16';
 
 const CELL = 1;
 
@@ -576,12 +576,12 @@ function buildMesh(block, key, world) {
     case 'rail':
     case 'powered_rail':
     case 'activator_rail': {
-      buildRail(g, block.type, railAxis(world, key), !!block.active);
+      buildRail(g, block.type, railEnds(world, key), !!block.active);
       break;
     }
     case 'minecart':
     case 'tnt_minecart': {
-      if (block.rail) buildRail(g, block.rail.type, railAxis(world, key), !!block.rail.active);
+      if (block.rail) buildRail(g, block.rail.type, railEnds(world, key), !!block.rail.active);
       const tnt = block.type === 'tnt_minecart';
       const bodyMat = mat(tnt ? 0xc0392b : 0x8f8f8f, { metalness: 0.3, roughness: 0.5, emissive: 0x000000 });
       const body = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.34, 0.62), bodyMat);
@@ -600,27 +600,40 @@ function buildMesh(block, key, world) {
   return g;
 }
 
-// A flat rail track: two rails along `axis` on wooden ties. Powered/activator
-// rails glow when active. Returns nothing; stores the rail material in dyn.
-function buildRail(g, type, axis, active) {
-  const Y = -0.45, H = 0.06;
+// A box spanning from point `a` to point `b` (used to draw rail segments that
+// may bend or slope). Width `w` across, thin in height.
+function barBetween(a, b, w, m) {
+  const d = new THREE.Vector3().subVectors(b, a);
+  const len = Math.max(d.length(), 0.01);
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(len, 0.06, w), m);
+  mesh.position.copy(a).addScaledVector(d, 0.5);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), d.clone().normalize());
+  return mesh;
+}
+
+// A rail track from its two `ends` (each {dir, dy}). Each end is drawn as two
+// parallel rail segments from the centre out to that edge, rising for a slope —
+// so straight rails are a line, corners bend, and ascending rails ramp up.
+function buildRail(g, type, ends, active) {
+  const Y = -0.45;
   const cold = type === 'activator_rail' ? 0x6f4a38 : type === 'powered_rail' ? 0x8a6a1c : 0x9a9a9a;
   const hot = type === 'activator_rail' ? 0xff4a33 : 0xffc340;
   const m = mat(active ? hot : cold, { emissive: active ? hot : 0x000000, roughness: 0.55, metalness: 0.4 });
-  // ties (perpendicular sleepers)
   const tieMat = mat(0x4a3a2a, { roughness: 1 });
-  for (const t of [-0.32, 0, 0.32]) {
-    const geo = axis === 'x' ? new THREE.BoxGeometry(0.12, H * 0.7, 0.62) : new THREE.BoxGeometry(0.62, H * 0.7, 0.12);
-    const tie = new THREE.Mesh(geo, tieMat);
-    tie.position.set(axis === 'x' ? t : 0, Y - 0.015, axis === 'x' ? 0 : t);
+  const centre = new THREE.Vector3(0, Y, 0);
+  for (const e of ends) {
+    const v = DIRS[e.dir];
+    const perp = new THREE.Vector3(v.z, 0, -v.x);           // horizontal, across the rails
+    const edge = new THREE.Vector3(v.x * 0.5, Y + e.dy * 0.5, v.z * 0.5);
+    for (const s of [0.16, -0.16]) {
+      g.add(barBetween(centre.clone().addScaledVector(perp, s), edge.clone().addScaledVector(perp, s), 0.07, m));
+    }
+    // one sleeper tie across this half
+    const mid = centre.clone().lerp(edge, 0.55);
+    const tie = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.045, 0.6), tieMat);
+    tie.position.copy(mid).setY(mid.y - 0.015);
+    tie.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), new THREE.Vector3(v.x, 0, v.z));
     g.add(tie);
-  }
-  // the two rails
-  for (const off of [0.16, -0.16]) {
-    const geo = axis === 'x' ? new THREE.BoxGeometry(0.94, H, 0.07) : new THREE.BoxGeometry(0.07, H, 0.94);
-    const rail = new THREE.Mesh(geo, m);
-    rail.position.set(axis === 'x' ? 0 : off, Y, axis === 'x' ? off : 0);
-    g.add(rail);
   }
   g.userData.dyn.railMat = m;
   g.userData.dyn.railType = type;

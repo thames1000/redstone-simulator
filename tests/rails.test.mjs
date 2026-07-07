@@ -78,4 +78,32 @@ run('active activator rail primes and detonates a TNT minecart', () => {
   eq(e.get('1,1,0'), undefined, 'the blast cleared a nearby block');
 });
 
+// 6. A plain rail corner turns the minecart 90 degrees.
+run('a rail corner turns the minecart', () => {
+  const e = new RedstoneEngine();
+  // floor for every rail cell
+  for (const c of ['0,0,0', '1,0,0', '2,0,0', '2,0,1', '2,0,2']) e.place(c, 'stone');
+  e.place('1,1,0', 'rail');
+  e.place('2,1,0', 'rail');          // corner: neighbours west (1,1,0) + south (2,1,1)
+  e.place('2,1,1', 'rail'); e.place('2,1,2', 'rail');
+  cartOn(e, '0,1,0', 'minecart', 'powered_rail', 'east');
+  e.place('0,1,-1', 'redstone_block');
+  for (let i = 0; i < 8; i++) e.tick();
+  eq(e.get('2,1,2')?.type, 'minecart', 'cart rounded the corner and headed south');
+  eq(e.get('2,1,2')?.dir, 'south', 'cart is now travelling south');
+});
+
+// 7. A rail that ascends carries the minecart up a level.
+run('an ascending rail carries the cart up a block', () => {
+  const e = new RedstoneEngine();
+  e.place('0,0,0', 'stone'); e.place('1,0,0', 'stone');
+  e.place('2,1,0', 'stone');          // support for the raised rail
+  e.place('1,1,0', 'rail');           // becomes ascending-east (east neighbour is one up)
+  e.place('2,2,0', 'rail');           // the higher rail
+  cartOn(e, '0,1,0', 'minecart', 'powered_rail', 'east');
+  e.place('0,1,-1', 'redstone_block');
+  for (let i = 0; i < 8; i++) e.tick();
+  eq(e.get('2,2,0')?.type, 'minecart', 'cart climbed one block up the slope');
+});
+
 console.log('\nDone.');
