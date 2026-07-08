@@ -251,4 +251,14 @@ run('a repeater is powered by a redstone block and by the previous repeater', ()
   eq(e.get('3,1,0')._lit, true, 'lamp at the chain end is lit');
 });
 
+// 19. A repeater must NOT read a source across an empty gap behind it.
+run('a repeater does not read a source across an air gap', () => {
+  const e = new RedstoneEngine();
+  e.place('0,1,0', 'redstone_block');            // source
+  // gap (air) at 1,1,0
+  e.place('2,1,0', 'repeater').dir = 'east';      // rear cell is the empty gap
+  for (let i = 0; i < 10; i++) e.tick();
+  eq(e.get('2,1,0').repOn, false, 'nothing touches the rear -> stays off');
+});
+
 console.log('\nDone.');

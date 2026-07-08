@@ -10,7 +10,7 @@
 import {
   DIRS, DIR_NAMES, OPPOSITE, HORIZONTAL, sidesOf,
   keyOf, parseKey, addDir, BLOCK_TYPES, makeBlock, isMovable, isPoppable, railEnds,
-} from './blocks.js?v=21';
+} from './blocks.js?v=22';
 
 const HORIZ_AND_DOWN = ['east', 'west', 'south', 'north', 'down'];
 const MAX_PUSH = 12;        // a piston moves at most this many blocks
@@ -115,11 +115,12 @@ export class RedstoneEngine {
         }
         case 'repeater': {
           const back = addDir(key, OPPOSITE[b.dir]);
-          // Read the actual signal the block behind presents (like a comparator):
-          // this sees a source AT the rear cell — a redstone block, or another
-          // repeater/comparator pointing in — which _isPowered (power flowing
-          // *into* the cell) misses, so a repeater couldn't power the next one.
-          const input = this._signalLevel(back, key, field) > 0 || this._isPowered(back, field);
+          // Read the actual signal present AT the rear cell (like a comparator):
+          // a redstone block, an upstream repeater/comparator's directed output,
+          // dust, or a block's own strong/weak power. NOT power flowing *into*
+          // that cell (_isPowered) — that reads a source across an empty gap and
+          // chains block-to-block, powering the repeater "out of nowhere".
+          const input = this._signalLevel(back, key, field) > 0;
           // Locked if a repeater/comparator on either side faces into us and is on.
           let locked = false;
           for (const sd of sidesOf(b.dir)) {
