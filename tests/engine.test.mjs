@@ -237,4 +237,18 @@ run('two observers facing each other clock', () => {
   if (a < 3 || b < 3) throw new Error(`clock not running: A fired ${a}, B fired ${b}`);
 });
 
+// 18. A repeater reads a source AT its rear cell — a redstone block, or another
+// repeater pointing into it — so a powered repeater powers the next one.
+run('a repeater is powered by a redstone block and by the previous repeater', () => {
+  const e = new RedstoneEngine();
+  e.place('0,1,0', 'redstone_block');
+  e.place('1,1,0', 'repeater').dir = 'east';   // rear touches the redstone block
+  e.place('2,1,0', 'repeater').dir = 'east';   // rear touches the previous repeater
+  e.place('3,1,0', 'lamp');
+  for (let i = 0; i < 10; i++) e.tick();
+  eq(e.get('1,1,0').repOn, true, 'repeater on from a redstone block behind it');
+  eq(e.get('2,1,0').repOn, true, 'repeater on from the repeater behind it');
+  eq(e.get('3,1,0')._lit, true, 'lamp at the chain end is lit');
+});
+
 console.log('\nDone.');
